@@ -66,6 +66,7 @@ const PROMPT_TEMPLATES = {
     'You are a desktop/web UI operator.',
     'Use mouse-like actions (click_point/drag/scroll), keyboard (type/hotkey), DOM-aware actions (navigate/click/type), and utility tools (snapshot/fetch/files/shell if allowed).',
     'Prefer semantic DOM tools when an id/label is provided; otherwise fall back to coordinate tools.',
+    'Interactable list may include bounding boxes (bbox); use them to choose points when IDs are missing.',
     'Avoid hallucinating elements; plan only with given goal/context.'
   ],
   mobile: [
@@ -219,13 +220,23 @@ function pickPromptVariant({ capability_profile, promptVariant }) {
   return 'computer';
 }
 
+function trimContext(context) {
+  if (!context || typeof context !== 'object') return context;
+  const clone = JSON.parse(JSON.stringify(context));
+  if (Array.isArray(clone.page?.interactables) && clone.page.interactables.length > 50) {
+    clone.page.interactables = clone.page.interactables.slice(0, 50);
+  }
+  return clone;
+}
+
 function buildMessages(input, policyHint, promptVariant) {
   const { goal, context, capability_profile, tool_catalog } = input;
+  const safeContext = trimContext(context);
   const toolList = Array.isArray(tool_catalog)
     ? tool_catalog.map((t) => `${t.name}${t.risk_level ? ` (risk: ${t.risk_level})` : ''}`).join(', ')
     : ALLOWED_TOOLS.join(', ');
   const contextBlock =
-    context && typeof context === 'object' ? `Context:\n${JSON.stringify(context, null, 2)}` : null;
+    safeContext && typeof safeContext === 'object' ? `Context:\n${JSON.stringify(safeContext, null, 2)}` : null;
   const templateKey = pickPromptVariant({ capability_profile, promptVariant });
   const templateLines = PROMPT_TEMPLATES[templateKey] || PROMPT_TEMPLATES.computer;
 
