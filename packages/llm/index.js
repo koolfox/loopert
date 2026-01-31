@@ -1,6 +1,8 @@
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
 import { randomUUID } from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import ollama, { Ollama } from 'ollama';
 
 const ALLOWED_TOOLS = [
@@ -81,6 +83,19 @@ const PROMPT_TEMPLATES = {
     'Use coordinate tools when DOM ids are missing.'
   ]
 };
+
+function loadRalphPrompt() {
+  const p = path.join(process.cwd(), 'scripts', 'ralph-upstream', 'prompt.md');
+  if (!fs.existsSync(p)) return null;
+  try {
+    const text = fs.readFileSync(p, 'utf8');
+    return text.slice(0, 6000); // guard size
+  } catch (_) {
+    return null;
+  }
+}
+
+const RALPH_PROMPT = loadRalphPrompt();
 
 function parsePlanContent(content) {
   if (!content) return { error: 'empty_response' };
@@ -252,6 +267,7 @@ function buildMessages(input, policyHint, promptVariant) {
 
   return [
     { role: 'system', content: SYSTEM_PROMPT },
+    RALPH_PROMPT ? { role: 'system', content: RALPH_PROMPT } : null,
     {
       role: 'user',
       content: [
