@@ -281,3 +281,5 @@ Provides rich reasoning summaries
 Supports DOM-grounded and coordinate-level actions (for visual grounding)
 
 Profiles range from assisted to unleashed; higher profiles unlock high-risk tools (shell/write_file) and coordinate actions
+
+Coordinate safety: points are rescaled to current viewport and clipped; invalid coords are skipped with logging.

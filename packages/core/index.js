@@ -97,6 +97,16 @@ async function resolvePointAbs(point, page) {
   return { x: Math.max(0, norm.x), y: Math.max(0, norm.y) };
 }
 
+function clipPointToViewport(point, viewport) {
+  if (!point) return null;
+  const w = viewport?.width ?? 1280;
+  const h = viewport?.height ?? 720;
+  return {
+    x: Math.min(Math.max(point.x, 0), w),
+    y: Math.min(Math.max(point.y, 0), h)
+  };
+}
+
 function formatStep(step, index) {
   return `${index + 1}. ${step.tool} ${JSON.stringify(step.args)}`;
 }
@@ -210,6 +220,47 @@ function validatePlanAgainst(plan, profile, toolCatalog = DEFAULT_TOOL_CATALOG) 
   return { ok: true };
 }
 
+async function normalizeCoordinates(plan, page, logger) {
+  if (!plan?.steps?.length) return plan;
+  const viewport = page.viewportSize() || { width: 1280, height: 720 };
+  const clamp = (pt) => clipPointToViewport(pt, viewport);
+
+  const adjustPoint = async (pt) => {
+    const abs = await resolvePointAbs(pt, page);
+    return clamp(abs);
+  };
+
+  const adjustedSteps = [];
+  for (const [idx, step] of plan.steps.entries()) {
+    let s = { ...step };
+    if (s.tool === 'click_point' && s.args?.point) {
+      const fixed = await adjustPoint(s.args.point);
+      if (!fixed) {
+        if (logger) logger(`skip step ${idx + 1}: invalid point`);
+        continue;
+      }
+      s = { ...s, args: { ...s.args, point: fixed } };
+    } else if (s.tool === 'drag') {
+      const from = await adjustPoint(s.args?.from);
+      const to = await adjustPoint(s.args?.to);
+      if (!from || !to) {
+        if (logger) logger(`skip step ${idx + 1}: invalid drag points`);
+        continue;
+      }
+      s = { ...s, args: { ...s.args, from, to } };
+    } else if (s.tool === 'long_press' && s.args?.point) {
+      const fixed = await adjustPoint(s.args.point);
+      if (!fixed) {
+        if (logger) logger(`skip step ${idx + 1}: invalid long_press point`);
+        continue;
+      }
+      s = { ...s, args: { ...s.args, point: fixed } };
+    }
+    adjustedSteps.push(s);
+  }
+  return { ...plan, steps: adjustedSteps };
+}
+
 async function collectInteractables(page) {
   try {
     return await page.evaluate(() => {
@@ -219,6 +270,7 @@ async function collectInteractables(page) {
         )
       );
       return nodes.slice(0, 150).map((el, idx) => {
+        const rect = el.getBoundingClientRect();
         const id = el.id || '';
         const role = el.getAttribute('role') || el.tagName.toLowerCase();
         const type = el.getAttribute('type') || el.tagName.toLowerCase();
@@ -237,7 +289,13 @@ async function collectInteractables(page) {
           role,
           type,
           label,
-          locatorHint
+          locatorHint,
+          bbox: {
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height
+          }
         };
       });
     });
@@ -652,6 +710,9 @@ export async function runPocSession(options) {
       plan = planResult.plan;
       llmRaw = planResult.raw;
     }
+
+    // coordinate normalization and clipping
+    plan = await normalizeCoordinates(plan, page, logger);
 
     if (llmRaw) {
       if (llmLog === 'off') {
