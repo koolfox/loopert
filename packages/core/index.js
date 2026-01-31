@@ -75,6 +75,14 @@ const DEFAULT_GUARDRAILS = {
       allow_password: true,
       require_origin_confirmation: false,
       autonomy_level: 'auto'
+    },
+    mobile: {
+      description: 'Mobile/touch profile with coordinate tools enabled, shell blocked',
+      max_steps: 25,
+      blocked_tools: ['shell', 'write_file'],
+      allow_password: false,
+      require_origin_confirmation: true,
+      autonomy_level: 'semi_auto'
     }
   }
 };
