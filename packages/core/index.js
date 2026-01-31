@@ -272,10 +272,17 @@ async function normalizeCoordinates(plan, page, logger) {
 function scoreCandidate(text, keyLower) {
   if (!text) return 0;
   const t = text.toLowerCase();
-  if (t === keyLower) return 3;
-  if (t.includes(keyLower)) return 2;
-  if (keyLower.includes(t)) return 1.5;
-  return 0;
+  if (t === keyLower) return 4;
+  if (t.includes(keyLower)) return 3;
+  if (keyLower.includes(t)) return 2;
+  // soft match: Jaro-Winkler-lite (prefix bonus)
+  let bonus = 0;
+  const minLen = Math.min(t.length, keyLower.length);
+  for (let i = 0; i < Math.min(minLen, 4); i++) {
+    if (t[i] === keyLower[i]) bonus += 0.25;
+    else break;
+  }
+  return bonus;
 }
 
 function findInteractableByLabel(interactables, key) {
@@ -285,10 +292,10 @@ function findInteractableByLabel(interactables, key) {
   let bestScore = 0;
   for (const cand of interactables) {
     const score =
-      scoreCandidate(cand.id, keyLower) * 1.2 +
-      scoreCandidate(cand.label, keyLower) +
-      scoreCandidate(cand.locatorHint, keyLower) * 0.8 +
-      scoreCandidate(cand.role, keyLower) * 0.5;
+      scoreCandidate(cand.id, keyLower) * 1.4 +
+      scoreCandidate(cand.label, keyLower) * 1.2 +
+      scoreCandidate(cand.locatorHint, keyLower) +
+      scoreCandidate(cand.role, keyLower) * 0.6;
     if (score > bestScore) {
       bestScore = score;
       best = cand;
