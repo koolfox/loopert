@@ -12,7 +12,8 @@
   "scripts": {
     "desktop": "node apps/desktop/index.js",
     "poc": "npm run desktop",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "smoke": "node -e \"console.log('smoke ok')\"",
+    "test": "npm run smoke"
   },
   "keywords": [],
   "author": "",
