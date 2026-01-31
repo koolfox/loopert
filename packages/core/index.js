@@ -767,6 +767,7 @@ export async function runPocSession(options) {
   };
 
   try {
+    const stepResults = [];
     if (precomputedPlan) {
       const validation = validatePlanSchema(precomputedPlan);
       if (validation.error) {
@@ -859,7 +860,28 @@ export async function runPocSession(options) {
       }
       logger(kleur.yellow(`Executing step ${idx + 1}/${plan.steps.length}: ${step.tool}`));
       logStructured(onUpdate, 'step_start', step.tool, { idx, args: step.args });
-      await executeStep(step, execContext);
+      const t0 = Date.now();
+      let status = 'ok';
+      try {
+        await executeStep(step, execContext);
+      } catch (err) {
+        status = 'error';
+        stepResults.push({ idx, tool: step.tool, status, ms: Date.now() - t0, error: err.message });
+        logStructured(onUpdate, 'step_end', step.tool, { idx, status, error: err.message, ms: Date.now() - t0 });
+        throw err;
+      }
+      const ms = Date.now() - t0;
+      stepResults.push({ idx, tool: step.tool, status, ms });
+      logStructured(onUpdate, 'step_end', step.tool, { idx, status, ms });
+    }
+
+    try {
+      ensureDir(artifactsDir);
+      const outPath = path.join(artifactsDir, 'step-log.json');
+      fs.writeFileSync(outPath, JSON.stringify(stepResults, null, 2));
+      logStructured(onUpdate, 'steps_logged', 'Wrote step log', { path: outPath });
+    } catch (_) {
+      // ignore logging failures
     }
   } catch (err) {
     await browser.close();
