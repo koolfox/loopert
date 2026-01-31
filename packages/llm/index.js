@@ -198,15 +198,25 @@ function normalizePlan(plan, fallbackAutonomy = DEFAULT_AUTONOMY) {
     return { tool, args, explanation, estimated_risk, confidence };
   });
 
+  const toStringSafe = (val) => {
+    if (val === undefined || val === null) return '';
+    if (typeof val === 'string') return val;
+    try {
+      return JSON.stringify(val);
+    } catch (_) {
+      return String(val);
+    }
+  };
+
   const autonomy =
-    plan.autonomy_level ||
-    plan.autonomyLevel ||
-    plan.capability_profile ||
+    (typeof plan.autonomy_level === 'string' && plan.autonomy_level) ||
+    (typeof plan.autonomyLevel === 'string' && plan.autonomyLevel) ||
+    (typeof plan.capability_profile === 'string' && plan.capability_profile) ||
     fallbackAutonomy ||
     DEFAULT_AUTONOMY;
 
   return {
-    reasoning_summary: plan.reasoning_summary || plan.summary || '',
+    reasoning_summary: toStringSafe(plan.reasoning_summary || plan.summary || ''),
     plan_id: plan.plan_id || plan.planId || createPlanId(),
     autonomy_level: autonomy,
     steps: normalizedSteps
