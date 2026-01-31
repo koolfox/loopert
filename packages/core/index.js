@@ -119,6 +119,16 @@ function formatStep(step, index) {
   return `${index + 1}. ${step.tool} ${JSON.stringify(step.args)}`;
 }
 
+function logStructured(onUpdate, level, msg, meta = {}) {
+  if (!onUpdate) return;
+  const payload = { level, msg, ...meta };
+  try {
+    onUpdate(JSON.stringify(payload));
+  } catch (_) {
+    onUpdate(`${level}: ${msg}`);
+  }
+}
+
 async function enforceRateLimit(lastActionAt, minIntervalMs = DEFAULT_MIN_ACTION_INTERVAL_MS) {
   const elapsed = Date.now() - lastActionAt.value;
   if (elapsed < minIntervalMs) {
@@ -750,6 +760,7 @@ export async function runPocSession(options) {
     currentOrigin: null,
     confirmOriginChangeFn,
     logger,
+    logStructured: (level, msg, meta) => logStructured(onUpdate, level, msg, meta),
     isMobile: isMobileProfile,
     killSignal,
     cookieDismiss
@@ -771,40 +782,41 @@ export async function runPocSession(options) {
         )
       );
       const snapshot = await collectSnapshot(page);
-    const plannerInput = {
-      goal,
-      context: snapshot,
-      capability_profile: capabilityProfile,
-      tool_catalog: toolCatalog
-    };
-    const planResult = await planGoal(plannerInput, {
-      model,
-      host,
-      policyHint,
-      toolCatalog,
-      capabilityProfile,
-      promptVariant: promptVariant || (isMobileProfile ? 'mobile' : undefined)
-    });
-    if (planResult.error) {
-      const detailMsg =
-        planResult.details && Array.isArray(planResult.details)
-          ? JSON.stringify(planResult.details)
-          : planResult.details || '';
-      const rawMsg = planResult.raw ? ` Raw: ${String(planResult.raw).slice(0, 400)}...` : '';
-      onUpdate(
-        kleur.red(
-          `Planner error (${planResult.error}) ${detailMsg ? `details=${detailMsg}` : ''}${rawMsg}`
-        )
-      );
-      await browser.close();
-      return { status: 'planner_error', detail: planResult };
+      const plannerInput = {
+        goal,
+        context: snapshot,
+        capability_profile: capabilityProfile,
+        tool_catalog: toolCatalog
+      };
+      const planResult = await planGoal(plannerInput, {
+        model,
+        host,
+        policyHint,
+        toolCatalog,
+        capabilityProfile,
+        promptVariant: promptVariant || (isMobileProfile ? 'mobile' : undefined)
+      });
+      if (planResult.error) {
+        const detailMsg =
+          planResult.details && Array.isArray(planResult.details)
+            ? JSON.stringify(planResult.details)
+            : planResult.details || '';
+        const rawMsg = planResult.raw ? ` Raw: ${String(planResult.raw).slice(0, 400)}...` : '';
+        onUpdate(
+          kleur.red(
+            `Planner error (${planResult.error}) ${detailMsg ? `details=${detailMsg}` : ''}${rawMsg}`
+          )
+        );
+        await browser.close();
+        return { status: 'planner_error', detail: planResult };
+      }
+      plan = planResult.plan;
+      llmRaw = planResult.raw;
     }
-    plan = planResult.plan;
-    llmRaw = planResult.raw;
-  }
 
     // coordinate normalization and clipping
     plan = await normalizeCoordinates(plan, page, logger);
+    logStructured(onUpdate, 'plan_ready', 'Validated plan', { plan_id: plan.plan_id, steps: plan.steps.length });
 
     if (llmRaw) {
       if (llmLog === 'off') {
@@ -846,6 +858,7 @@ export async function runPocSession(options) {
         throw new Error('killed');
       }
       logger(kleur.yellow(`Executing step ${idx + 1}/${plan.steps.length}: ${step.tool}`));
+      logStructured(onUpdate, 'step_start', step.tool, { idx, args: step.args });
       await executeStep(step, execContext);
     }
   } catch (err) {
