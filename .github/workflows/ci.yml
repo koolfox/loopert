@@ -27,3 +27,6 @@ jobs:
 
       - name: Smoke test
         run: npm test
+
+      - name: Playwright smoke (headless example.com)
+        run: npm run smoke:play

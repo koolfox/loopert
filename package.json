@@ -13,6 +13,7 @@
     "desktop": "node apps/desktop/index.js",
     "poc": "npm run desktop",
     "smoke": "node -e \"import('./packages/core/index.js'); import('./packages/llm/index.js'); console.log('smoke ok');\"",
+    "smoke:play": "node -e \"import('playwright').then(async ({ chromium }) => { const browser = await chromium.launch({ headless: true }); const page = await (await browser.newContext()).newPage(); await page.goto('https://example.com', { waitUntil: 'domcontentloaded' }); await page.screenshot({ path: 'artifacts/ci-smoke.png', fullPage: true }); await browser.close(); console.log('playwright smoke ok'); });\"",
     "test": "npm run smoke"
   },
   "keywords": [],

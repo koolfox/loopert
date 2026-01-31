@@ -261,6 +261,27 @@ async function normalizeCoordinates(plan, page, logger) {
   return { ...plan, steps: adjustedSteps };
 }
 
+function findInteractableByLabel(interactables, key) {
+  if (!key || !Array.isArray(interactables)) return null;
+  const lower = key.toLowerCase();
+  return (
+    interactables.find((i) => (i.id || '').toLowerCase() === lower) ||
+    interactables.find((i) => (i.label || '').toLowerCase() === lower) ||
+    interactables.find((i) => (i.locatorHint || '').toLowerCase() === lower) ||
+    null
+  );
+}
+
+function bboxCenter(bbox) {
+  if (!bbox) return null;
+  const { x, y, width, height, centerX, centerY } = bbox;
+  if (Number.isFinite(centerX) && Number.isFinite(centerY)) return { x: centerX, y: centerY };
+  if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(width) && Number.isFinite(height)) {
+    return { x: x + width / 2, y: y + height / 2 };
+  }
+  return null;
+}
+
 async function collectInteractables(page) {
   try {
     return await page.evaluate(() => {
@@ -277,28 +298,30 @@ async function collectInteractables(page) {
         const aria = el.getAttribute('aria-label') || '';
         const placeholder = el.getAttribute('placeholder') || '';
         const text = (el.innerText || '').trim();
-        const label =
-          aria ||
-          placeholder ||
-          text.slice(0, 120) ||
-          id ||
-          `${role}-${idx}`;
-        const locatorHint = id ? `#${id}` : text ? text.slice(0, 50) : label.slice(0, 50);
-        return {
-          id: id || label || `node-${idx}`,
-          role,
-          type,
-          label,
-          locatorHint,
-          bbox: {
-            x: rect.x,
-            y: rect.y,
-            width: rect.width,
-            height: rect.height
-          }
-        };
-      });
+      const label =
+        aria ||
+        placeholder ||
+        text.slice(0, 120) ||
+        id ||
+        `${role}-${idx}`;
+      const locatorHint = id ? `#${id}` : text ? text.slice(0, 50) : label.slice(0, 50);
+      return {
+        id: id || label || `node-${idx}`,
+        role,
+        type,
+        label,
+        locatorHint,
+        bbox: {
+          x: rect.x,
+          y: rect.y,
+          width: rect.width,
+          height: rect.height,
+          centerX: rect.x + rect.width / 2,
+          centerY: rect.y + rect.height / 2
+        }
+      };
     });
+  });
   } catch (_) {
     return [];
   }
@@ -445,6 +468,7 @@ async function executeStep(step, context) {
     artifactsDir,
     confirmOriginChangeFn,
     logger,
+    interactables,
     killSignal,
     cookieDismiss
   } = context;
@@ -469,7 +493,18 @@ async function executeStep(step, context) {
     case 'click': {
       const key = step.args.id;
       if (!key) throw new Error('click_missing_id');
-      const locator = await resolveLocator(page, key);
+      let locator = null;
+      try {
+        locator = await resolveLocator(page, key);
+      } catch (err) {
+        const match = findInteractableByLabel(interactables, key);
+        const pt = bboxCenter(match?.bbox);
+        if (pt) {
+          await page.mouse.click(pt.x, pt.y, { timeout: 8000 });
+          break;
+        }
+        throw err;
+      }
       await locator.click({ timeout: 8000 });
       break;
     }
@@ -491,7 +526,20 @@ async function executeStep(step, context) {
       const from = await resolvePointAbs(step.args.from, page);
       const to = await resolvePointAbs(step.args.to, page);
       if (!from || !to) {
-        throw new Error('drag_missing_points');
+        // attempt bbox-based fallback if ids provided
+        const fromMatch = findInteractableByLabel(interactables, step.args.fromId);
+        const toMatch = findInteractableByLabel(interactables, step.args.toId);
+        const fromPt = bboxCenter(fromMatch?.bbox);
+        const toPt = bboxCenter(toMatch?.bbox);
+        if (!fromPt || !toPt) {
+          throw new Error('drag_missing_points');
+        }
+        await page.mouse.move(fromPt.x, fromPt.y);
+        await page.mouse.down();
+        await page.mouse.move(toPt.x, toPt.y, { steps: 10 });
+        await page.waitForTimeout(Number(durationMs));
+        await page.mouse.up();
+        break;
       }
       await page.mouse.move(from.x, from.y);
       await page.mouse.down();
@@ -515,7 +563,14 @@ async function executeStep(step, context) {
       const point = await resolvePointAbs(step.args.point, page);
       const duration = Number(step.args.durationMs || 800);
       if (!point) {
-        throw new Error('long_press_missing_xy');
+        const match = findInteractableByLabel(interactables, step.args.id || step.args.label);
+        const pt = bboxCenter(match?.bbox);
+        if (!pt) throw new Error('long_press_missing_xy');
+        await page.mouse.move(pt.x, pt.y);
+        await page.mouse.down();
+        await page.waitForTimeout(duration);
+        await page.mouse.up();
+        break;
       }
       await page.mouse.move(point.x, point.y);
       await page.mouse.down();
