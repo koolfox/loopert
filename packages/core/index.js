@@ -129,6 +129,14 @@ function logStructured(onUpdate, level, msg, meta = {}) {
   }
 }
 
+function resolveSandboxPath(base, targetPath) {
+  const resolved = path.resolve(base, targetPath);
+  if (!resolved.startsWith(base)) {
+    throw new Error('sandbox_violation');
+  }
+  return resolved;
+}
+
 async function enforceRateLimit(lastActionAt, minIntervalMs = DEFAULT_MIN_ACTION_INTERVAL_MS) {
   const elapsed = Date.now() - lastActionAt.value;
   if (elapsed < minIntervalMs) {
@@ -666,7 +674,7 @@ async function executeStep(step, context) {
       break;
     }
     case 'read_file': {
-      const targetPath = step.args.path;
+      const targetPath = resolveSandboxPath(context.workspaceRoot, step.args.path);
       const encoding = step.args.encoding || 'utf8';
       if (!targetPath) throw new Error('read_file_missing_path');
       const content = fs.readFileSync(targetPath, encoding);
@@ -674,7 +682,7 @@ async function executeStep(step, context) {
       break;
     }
     case 'write_file': {
-      const targetPath = step.args.path;
+      const targetPath = resolveSandboxPath(context.workspaceRoot, step.args.path);
       const content = step.args.content ?? '';
       const encoding = step.args.encoding || 'utf8';
       if (!targetPath) throw new Error('write_file_missing_path');
@@ -688,7 +696,7 @@ async function executeStep(step, context) {
       const timeoutMs = Number(step.args.timeoutMs || 15000);
       if (!cmd) throw new Error('shell_missing_cmd');
       await new Promise((resolve, reject) => {
-        const child = exec(cmd, { timeout: timeoutMs }, (error, stdout, stderr) => {
+        const child = exec(cmd, { timeout: timeoutMs, cwd: context.workspaceRoot }, (error, stdout, stderr) => {
           if (logger) {
             if (stdout) logger(`shell stdout: ${stdout.slice(0, 800)}`);
             if (stderr) logger(`shell stderr: ${stderr.slice(0, 400)}`);
@@ -725,7 +733,8 @@ export async function runPocSession(options) {
     killSignal,
     artifactsDir = path.join(process.cwd(), 'artifacts'),
     llmLog = 'snippet',
-    promptVariant = null
+    promptVariant = null,
+    workspace = path.join(process.cwd(), 'loopert-workspace')
   } = options;
 
   const logger = (msg) => onUpdate(msg);
@@ -739,6 +748,8 @@ export async function runPocSession(options) {
   const policyHint = buildPolicyHint(guardrails.profile, toolCatalog);
   const capabilityProfile = guardrails.profile?.autonomy_level || 'assisted';
   const isMobileProfile = guardrails.profileName === 'mobile';
+  const workspaceRoot = path.resolve(workspace);
+  ensureDir(workspaceRoot);
   onUpdate(
     kleur.gray(
       `Guardrail profile: ${guardrails.profileName} (source: ${guardrails.source || 'built-in'})`
@@ -756,6 +767,7 @@ export async function runPocSession(options) {
   const execContext = {
     page,
     artifactsDir,
+    workspaceRoot,
     lastActionAt,
     currentOrigin: null,
     confirmOriginChangeFn,

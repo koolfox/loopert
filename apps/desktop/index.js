@@ -35,7 +35,8 @@ const DEFAULTS = {
   llmLog: 'snippet', // snippet | full | off
   repl: true,
   manualDefault: true,
-  disableTestSite: false
+  disableTestSite: false,
+  workspace: 'loopert-workspace'
 };
 
 function loadCliConfig(path) {
@@ -65,6 +66,7 @@ Options:
   --profile <name>     Guardrail profile (default: default)
   --config <path>      Path to guardrails YAML (default: guardrails.yaml)
   --prompt-variant <computer|mobile|grounding>  Force planner prompt style
+  --workspace <path>   Sandbox root for file/shell tools (default: loopert-workspace)
   --cli-config <path>  Path to CLI config.yaml (default: config.yaml)
   --plan <path>        Precomputed JSON plan file (bypasses planner)
   --repl               Chat-style loop: enter goals repeatedly until blank line
@@ -307,6 +309,7 @@ async function main() {
     profile: flags.profile || fileConfig.profile || DEFAULTS.profile,
     Config: flags.config || fileConfig._config || DEFAULTS.Config,
     promptVariant: flags['prompt-variant'] || fileConfig.prompt_variant,
+    workspace: flags.workspace || fileConfig.workspace || DEFAULTS.workspace,
     headless:
       flags.headless === true
         ? true
@@ -345,6 +348,7 @@ async function main() {
   const profile = merged.profile;
   const configPath = merged.Config;
   const promptVariant = merged.promptVariant;
+  const workspace = merged.workspace;
   const planPath = merged.planPath;
   const llmLog = merged.llmLog;
   const replMode = Boolean(merged.repl);
@@ -405,6 +409,7 @@ async function main() {
       profile,
       configPath,
       promptVariant,
+      workspace,
       precomputedPlan: useStubPlan ? buildStubPlan(url) : precomputedPlan,
       confirmPlan,
       confirmOriginChange,
