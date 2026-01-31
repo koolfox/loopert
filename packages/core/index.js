@@ -618,7 +618,8 @@ async function executeStep(step, context) {
       break;
     }
     case 'scroll': {
-      const deltaY = Number(step.args.deltaY ?? step.args.y ?? 500);
+      const baseDelta = Number(step.args.deltaY ?? step.args.y ?? (context.isMobile ? 250 : 500));
+      const deltaY = context.isMobile ? baseDelta * 0.7 : baseDelta;
       await page.mouse.wheel(0, deltaY);
       break;
     }
@@ -727,6 +728,7 @@ export async function runPocSession(options) {
   const guardrails = loadGuardrails({ configPath, profileName: profile });
   const policyHint = buildPolicyHint(guardrails.profile, toolCatalog);
   const capabilityProfile = guardrails.profile?.autonomy_level || 'assisted';
+  const isMobileProfile = guardrails.profileName === 'mobile';
   onUpdate(
     kleur.gray(
       `Guardrail profile: ${guardrails.profileName} (source: ${guardrails.source || 'built-in'})`
@@ -748,6 +750,7 @@ export async function runPocSession(options) {
     currentOrigin: null,
     confirmOriginChangeFn,
     logger,
+    isMobile: isMobileProfile,
     killSignal,
     cookieDismiss
   };
@@ -768,37 +771,37 @@ export async function runPocSession(options) {
         )
       );
       const snapshot = await collectSnapshot(page);
-      const plannerInput = {
-        goal,
-        context: snapshot,
-        capability_profile: capabilityProfile,
-        tool_catalog: toolCatalog
-      };
-      const planResult = await planGoal(plannerInput, {
-        model,
-        host,
-        policyHint,
-        toolCatalog,
-        capabilityProfile,
-        promptVariant
-      });
-      if (planResult.error) {
-        const detailMsg =
-          planResult.details && Array.isArray(planResult.details)
-            ? JSON.stringify(planResult.details)
-            : planResult.details || '';
-        const rawMsg = planResult.raw ? ` Raw: ${String(planResult.raw).slice(0, 400)}...` : '';
-        onUpdate(
-          kleur.red(
-            `Planner error (${planResult.error}) ${detailMsg ? `details=${detailMsg}` : ''}${rawMsg}`
-          )
-        );
-        await browser.close();
-        return { status: 'planner_error', detail: planResult };
-      }
-      plan = planResult.plan;
-      llmRaw = planResult.raw;
+    const plannerInput = {
+      goal,
+      context: snapshot,
+      capability_profile: capabilityProfile,
+      tool_catalog: toolCatalog
+    };
+    const planResult = await planGoal(plannerInput, {
+      model,
+      host,
+      policyHint,
+      toolCatalog,
+      capabilityProfile,
+      promptVariant: promptVariant || (isMobileProfile ? 'mobile' : undefined)
+    });
+    if (planResult.error) {
+      const detailMsg =
+        planResult.details && Array.isArray(planResult.details)
+          ? JSON.stringify(planResult.details)
+          : planResult.details || '';
+      const rawMsg = planResult.raw ? ` Raw: ${String(planResult.raw).slice(0, 400)}...` : '';
+      onUpdate(
+        kleur.red(
+          `Planner error (${planResult.error}) ${detailMsg ? `details=${detailMsg}` : ''}${rawMsg}`
+        )
+      );
+      await browser.close();
+      return { status: 'planner_error', detail: planResult };
     }
+    plan = planResult.plan;
+    llmRaw = planResult.raw;
+  }
 
     // coordinate normalization and clipping
     plan = await normalizeCoordinates(plan, page, logger);
