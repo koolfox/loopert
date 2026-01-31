@@ -64,6 +64,7 @@ Options:
   --host <url>         Ollama host (default: env OLLAMA_HOST)
   --profile <name>     Guardrail profile (default: default)
   --config <path>      Path to guardrails YAML (default: guardrails.yaml)
+  --prompt-variant <computer|mobile|grounding>  Force planner prompt style
   --cli-config <path>  Path to CLI config.yaml (default: config.yaml)
   --plan <path>        Precomputed JSON plan file (bypasses planner)
   --repl               Chat-style loop: enter goals repeatedly until blank line
@@ -305,6 +306,7 @@ async function main() {
     host: flags.host || fileConfig.host || DEFAULTS.host,
     profile: flags.profile || fileConfig.profile || DEFAULTS.profile,
     Config: flags.config || fileConfig._config || DEFAULTS.Config,
+    promptVariant: flags['prompt-variant'] || fileConfig.prompt_variant,
     headless:
       flags.headless === true
         ? true
@@ -342,6 +344,7 @@ async function main() {
   const host = merged.host;
   const profile = merged.profile;
   const configPath = merged.Config;
+  const promptVariant = merged.promptVariant;
   const planPath = merged.planPath;
   const llmLog = merged.llmLog;
   const replMode = Boolean(merged.repl);
@@ -401,6 +404,7 @@ async function main() {
       host,
       profile,
       configPath,
+      promptVariant,
       precomputedPlan: useStubPlan ? buildStubPlan(url) : precomputedPlan,
       confirmPlan,
       confirmOriginChange,

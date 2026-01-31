@@ -261,15 +261,32 @@ async function normalizeCoordinates(plan, page, logger) {
   return { ...plan, steps: adjustedSteps };
 }
 
+function scoreCandidate(text, keyLower) {
+  if (!text) return 0;
+  const t = text.toLowerCase();
+  if (t === keyLower) return 3;
+  if (t.includes(keyLower)) return 2;
+  if (keyLower.includes(t)) return 1.5;
+  return 0;
+}
+
 function findInteractableByLabel(interactables, key) {
   if (!key || !Array.isArray(interactables)) return null;
-  const lower = key.toLowerCase();
-  return (
-    interactables.find((i) => (i.id || '').toLowerCase() === lower) ||
-    interactables.find((i) => (i.label || '').toLowerCase() === lower) ||
-    interactables.find((i) => (i.locatorHint || '').toLowerCase() === lower) ||
-    null
-  );
+  const keyLower = key.toLowerCase();
+  let best = null;
+  let bestScore = 0;
+  for (const cand of interactables) {
+    const score =
+      scoreCandidate(cand.id, keyLower) * 1.2 +
+      scoreCandidate(cand.label, keyLower) +
+      scoreCandidate(cand.locatorHint, keyLower) * 0.8 +
+      scoreCandidate(cand.role, keyLower) * 0.5;
+    if (score > bestScore) {
+      bestScore = score;
+      best = cand;
+    }
+  }
+  return bestScore >= 1 ? best : null;
 }
 
 function bboxCenter(bbox) {
@@ -681,7 +698,8 @@ export async function runPocSession(options) {
     onUpdate = () => { },
     killSignal,
     artifactsDir = path.join(process.cwd(), 'artifacts'),
-    llmLog = 'snippet'
+    llmLog = 'snippet',
+    promptVariant = null
   } = options;
 
   const logger = (msg) => onUpdate(msg);
@@ -746,7 +764,8 @@ export async function runPocSession(options) {
         host,
         policyHint,
         toolCatalog,
-        capabilityProfile
+        capabilityProfile,
+        promptVariant
       });
       if (planResult.error) {
         const detailMsg =
