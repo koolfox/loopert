@@ -1,0 +1,29 @@
+profiles:
+  default:
+    description: Safe defaults that always require review
+    max_steps: 12
+    blocked_tools: [shell, write_file]
+    allow_password: false
+    require_origin_confirmation: true
+    autonomy_level: assisted
+  pro:
+    description: Looser step limit for power users; still avoid passwords
+    max_steps: 25
+    blocked_tools: [shell, write_file]
+    allow_password: false
+    require_origin_confirmation: true
+    autonomy_level: semi_auto
+  auto:
+    description: Trusted / demo mode with highest autonomy
+    max_steps: 30
+    blocked_tools: []
+    allow_password: true
+    require_origin_confirmation: false
+    autonomy_level: auto
+  unleashed:
+    description: Unrestricted high-power profile (you accept the risk)
+    max_steps: 40
+    blocked_tools: []
+    allow_password: true
+    require_origin_confirmation: false
+    autonomy_level: auto

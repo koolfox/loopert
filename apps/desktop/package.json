@@ -1,0 +1,12 @@
+{
+  "name": "@loopert/desktop",
+  "version": "0.1.0",
+  "description": "CLI for desktop agentic browser POC",
+  "type": "module",
+  "main": "index.js",
+  "license": "ISC",
+  "dependencies": {
+    "@loopert/core": "0.1.0",
+    "js-yaml": "^4.1.0"
+  }
+}

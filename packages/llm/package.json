@@ -1,0 +1,13 @@
+{
+  "name": "@loopert/llm",
+  "version": "0.1.0",
+  "description": "Ollama planner integration and schema validation",
+  "type": "module",
+  "main": "index.js",
+  "license": "ISC",
+  "dependencies": {
+    "ajv": "^8.12.0",
+    "ajv-formats": "^3.0.1",
+    "ollama": "^0.5.4"
+  }
+}

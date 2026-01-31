@@ -1,0 +1,12 @@
+model: mistral:7b-instruct-q4_K_M
+host: 
+profile: pro
+headless: false
+devtools: true
+auto_approve: false
+plan:
+stub_plan: false
+repl: true
+manual_default: true
+disable_test_site: true
+llm_log: snippet

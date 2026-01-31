@@ -1,0 +1,20 @@
+{
+  "name": "loopert",
+  "version": "1.0.0",
+  "description": "Desktop-first agentic browser POC",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/desktop",
+    "packages/core",
+    "packages/llm"
+  ],
+  "scripts": {
+    "desktop": "node apps/desktop/index.js",
+    "poc": "npm run desktop",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

@@ -1,0 +1,5 @@
+node_modules/
+artifacts/
+*.log
+ms-playwright/
+.DS_Store
