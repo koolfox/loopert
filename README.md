@@ -45,9 +45,5 @@ If you want the original Ralph prompt/harness from snarktank/ralph:
   (uses provider=openai, apiBase=http://localhost:11434/v1, dummy apiKey, model=ui-tars-1.5-7b)
 Make sure `ollama serve` is running and Node ≥22 for the Agent‑TARS CLI.
 
-## Browser-Use quickstart (cloud)
-- Get an API key from Browser-Use Cloud and export: `export BROWSER_USE_API_KEY=...`
-- Run a task:  
-  `TASK="Open example.com and take a screenshot" npm run browser-use:cloud`
-- The runner streams step events and prints the final task result.
-Docs: https://docs.browser-use.com/quickstart
+## Browser-Use (optional)
+Prefer local usage (PyPI) with Ollama for LLM. Cloud runner removed by default; if you need cloud, add your own script later.

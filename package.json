@@ -18,7 +18,6 @@
     "ralph:fetch": "node scripts/ralph-fetch.js",
     "ollama:pull-tars": "ollama pull 0000/ui-tars-1.5-7b",
     "agent-tars:ollama": "npx @agent-tars/cli --provider openai --apiBase http://localhost:11434/v1 --apiKey dummy --model ui-tars-1.5-7b",
-    "browser-use:cloud": "node scripts/browser-use-task.js \"${TASK:-Open example.com and take a screenshot}\"",
     "test": "npm run smoke"
   },
   "keywords": [],
