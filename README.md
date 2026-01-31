@@ -37,3 +37,10 @@ GitHub Actions workflow runs `npm ci` + `npm test` (smoke imports core/llm).
 If you want the original Ralph prompt/harness from snarktank/ralph:
 - Fetch: `npm run ralph:fetch` (downloads `ralph.sh` and `prompt.md` into `scripts/ralph-upstream/`).
 - Then run upstream script (requires bash): `bash scripts/ralph-upstream/ralph.sh` (adjust per your environment).
+
+## Agent‑TARS + Ollama helper
+- Pull UI‑TARS 7B model to Ollama: `npm run ollama:pull-tars`
+- Run Agent‑TARS CLI against the Ollama OpenAI endpoint:  
+  `npm run agent-tars:ollama`
+  (uses provider=openai, apiBase=http://localhost:11434/v1, dummy apiKey, model=ui-tars-1.5-7b)
+Make sure `ollama serve` is running and Node ≥22 for the Agent‑TARS CLI.

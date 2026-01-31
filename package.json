@@ -16,6 +16,8 @@
     "smoke:play": "node -e \"import('playwright').then(async ({ chromium }) => { const browser = await chromium.launch({ headless: true }); const page = await (await browser.newContext()).newPage(); await page.goto('https://example.com', { waitUntil: 'domcontentloaded' }); await page.screenshot({ path: 'artifacts/ci-smoke.png', fullPage: true }); await browser.close(); console.log('playwright smoke ok'); });\"",
     "ralph": "node scripts/ralph-loop.js --tasks tasks/ralph.json --max 5",
     "ralph:fetch": "node scripts/ralph-fetch.js",
+    "ollama:pull-tars": "ollama pull 0000/ui-tars-1.5-7b",
+    "agent-tars:ollama": "npx @agent-tars/cli --provider openai --apiBase http://localhost:11434/v1 --apiKey dummy --model ui-tars-1.5-7b",
     "test": "npm run smoke"
   },
   "keywords": [],
