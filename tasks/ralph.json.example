@@ -1,0 +1,10 @@
+{
+  "userStories": [
+    {
+      "id": "T-101",
+      "title": "Open example.com and snapshot",
+      "goal": "Navigate to https://example.com and take a snapshot.",
+      "passes": false
+    }
+  ]
+}

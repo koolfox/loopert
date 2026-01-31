@@ -27,3 +27,8 @@ GitHub Actions workflow runs `npm ci` + `npm test` (smoke imports core/llm).
 
 ## Issue opener workflow
 `workflow_dispatch` workflow uses `gh issue create` with `secrets.GITHUB_TOKEN` to file an issue on demand.
+
+## Ralph-style loop runner
+- Configure tasks in `tasks/ralph.json` (see `tasks/ralph.json.example`).
+- Run: `npm run ralph` (auto-approves plans, headless, up to 5 iterations by default).
+- Results are appended to `progress.txt`; task pass/fail is persisted back to the tasks file.
