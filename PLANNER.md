@@ -153,6 +153,14 @@ type(id, text) Input text
 scroll(deltaY) Scroll viewport
 wait_for_idle(ms) Wait for idle
 snapshot() Refresh context
+click_point(point{x,y}) Click by screen coordinates (tap)
+drag(from{ x,y }, to{ x,y }, durationMs?) Drag or swipe between coordinates
+long_press(point{x,y}, durationMs?) Press-and-hold at a point
+hotkey(keys[]) Send chorded keys
+fetch(url, …) HTTP fetch with optional method/body/headers
+read_file(path) Read local file
+write_file(path, content) Write local file
+shell(cmd) Run OS shell command (high risk; profile-gated)
 Any future tool Registered via schema
 
 Tools are registered with:
@@ -174,6 +182,7 @@ assisted: user confirms every step
 semi_auto: batch confirmation allowed
 
 auto: planner recommends, system may run autonomously
+unleashed: high-autonomy; enables high-risk tools (shell/write_file) and coordinate actions by default
 
 Planner outputs must include autonomy_level to communicate intended control behavior.
 
@@ -268,3 +277,7 @@ Outputs structured, schema-validated steps
 Supports multiple agents and planners
 
 Provides rich reasoning summaries
+
+Supports DOM-grounded and coordinate-level actions (for visual grounding)
+
+Profiles range from assisted to unleashed; higher profiles unlock high-risk tools (shell/write_file) and coordinate actions

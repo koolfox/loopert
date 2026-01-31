@@ -61,6 +61,26 @@ const ajv = new Ajv({ allErrors: true, strict: false });
 addFormats(ajv);
 const validate = ajv.compile(PLAN_SCHEMA);
 
+const PROMPT_TEMPLATES = {
+  computer: [
+    'You are a desktop/web UI operator.',
+    'Use mouse-like actions (click_point/drag/scroll), keyboard (type/hotkey), DOM-aware actions (navigate/click/type), and utility tools (snapshot/fetch/files/shell if allowed).',
+    'Prefer semantic DOM tools when an id/label is provided; otherwise fall back to coordinate tools.',
+    'Avoid hallucinating elements; plan only with given goal/context.'
+  ],
+  mobile: [
+    'You are a mobile/touch UI operator.',
+    'Use touch actions (click_point as tap, long_press, drag for swipe), scroll, type, hotkey only when clearly supported.',
+    'Assume soft keyboard; avoid multi-window desktop assumptions.',
+    'Keep actions minimal and sequential.'
+  ],
+  grounding: [
+    'Return only the minimal actions needed to fulfill the goal based on the screenshot and interactables.',
+    'Do not add explanations unrelated to actions.',
+    'Use coordinate tools when DOM ids are missing.'
+  ]
+};
+
 function parsePlanContent(content) {
   if (!content) return { error: 'empty_response' };
   try {
@@ -192,13 +212,22 @@ function normalizePlan(plan, fallbackAutonomy = DEFAULT_AUTONOMY) {
   };
 }
 
-function buildMessages(input, policyHint) {
+function pickPromptVariant({ capability_profile, promptVariant }) {
+  if (promptVariant && PROMPT_TEMPLATES[promptVariant]) return promptVariant;
+  const cap = (capability_profile || '').toLowerCase();
+  if (cap.includes('mobile') || cap.includes('touch')) return 'mobile';
+  return 'computer';
+}
+
+function buildMessages(input, policyHint, promptVariant) {
   const { goal, context, capability_profile, tool_catalog } = input;
   const toolList = Array.isArray(tool_catalog)
     ? tool_catalog.map((t) => `${t.name}${t.risk_level ? ` (risk: ${t.risk_level})` : ''}`).join(', ')
     : ALLOWED_TOOLS.join(', ');
   const contextBlock =
     context && typeof context === 'object' ? `Context:\n${JSON.stringify(context, null, 2)}` : null;
+  const templateKey = pickPromptVariant({ capability_profile, promptVariant });
+  const templateLines = PROMPT_TEMPLATES[templateKey] || PROMPT_TEMPLATES.computer;
 
   return [
     { role: 'system', content: SYSTEM_PROMPT },
@@ -207,6 +236,8 @@ function buildMessages(input, policyHint) {
       content: [
         `Goal: ${goal}`,
         capability_profile ? `Capability profile: ${capability_profile}` : null,
+        `Mode: ${templateKey}`,
+        templateLines.join('\n'),
         `Allowed tools: ${toolList}`,
         policyHint ? `Policy constraints:\n${policyHint}` : null,
         contextBlock,
@@ -236,7 +267,8 @@ export async function planGoal(goalInput, options = {}) {
     policyHint,
     toolCatalog: toolCatalogOpt,
     tool_catalog: toolCatalogAlt,
-    capabilityProfile
+    capabilityProfile,
+    promptVariant: promptVariantOpt
   } = options;
 
   const toolCatalog =
@@ -247,9 +279,14 @@ export async function planGoal(goalInput, options = {}) {
 
   const capability_profile = goalPayload.capability_profile || capabilityProfile || DEFAULT_AUTONOMY;
   const context = goalPayload.context;
+  const promptVariant = goalPayload.prompt_variant || promptVariantOpt;
 
   const client = createClient(host);
-  let messages = buildMessages({ goal, context, capability_profile, tool_catalog: toolCatalog }, policyHint);
+  let messages = buildMessages(
+    { goal, context, capability_profile, tool_catalog: toolCatalog },
+    policyHint,
+    promptVariant
+  );
   let lastRaw;
 
   for (let attempt = 0; attempt < 2; attempt++) {

@@ -12,7 +12,7 @@
   "scripts": {
     "desktop": "node apps/desktop/index.js",
     "poc": "npm run desktop",
-    "smoke": "node -e \"console.log('smoke ok')\"",
+    "smoke": "node -e \"import('./packages/core/index.js'); import('./packages/llm/index.js'); console.log('smoke ok');\"",
     "test": "npm run smoke"
   },
   "keywords": [],

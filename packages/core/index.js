@@ -87,6 +87,16 @@ function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
 }
 
+async function resolvePointAbs(point, page) {
+  if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return null;
+  const size = page.viewportSize() || { width: 1280, height: 720 };
+  const norm =
+    Math.abs(point.x) <= 1 && Math.abs(point.y) <= 1
+      ? { x: point.x * size.width, y: point.y * size.height }
+      : point;
+  return { x: Math.max(0, norm.x), y: Math.max(0, norm.y) };
+}
+
 function formatStep(step, index) {
   return `${index + 1}. ${step.tool} ${JSON.stringify(step.args)}`;
 }
@@ -240,6 +250,8 @@ async function collectSnapshot(page, { includeScreenshot = true } = {}) {
   const url = page.url();
   const origin = url ? new URL(url).origin : '';
   let screenshot = undefined;
+  const viewport = page.viewportSize() || {};
+  const deviceScaleFactor = await page.evaluate(() => window.devicePixelRatio).catch(() => undefined);
   if (includeScreenshot) {
     try {
       screenshot = await page.screenshot({ fullPage: true, encoding: 'base64' });
@@ -258,7 +270,12 @@ async function collectSnapshot(page, { includeScreenshot = true } = {}) {
     },
     visual: {
       screenshot,
-      visionFeatures: {}
+      visionFeatures: {},
+      viewport: {
+        width: viewport.width,
+        height: viewport.height,
+        deviceScaleFactor
+      }
     }
   };
 }
@@ -399,10 +416,10 @@ async function executeStep(step, context) {
       break;
     }
     case 'click_point': {
-      const point = step.args.point;
+      const point = await resolvePointAbs(step.args.point, page);
       const button = step.args.button || 'left';
       const clickCount = step.args.clickCount || 1;
-      if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+      if (!point) {
         throw new Error('click_point_missing_xy');
       }
       await page.mouse.move(point.x, point.y);
@@ -412,8 +429,10 @@ async function executeStep(step, context) {
       break;
     }
     case 'drag': {
-      const { from, to, durationMs = 400 } = step.args;
-      if (!from || !to || !Number.isFinite(from.x) || !Number.isFinite(from.y) || !Number.isFinite(to.x) || !Number.isFinite(to.y)) {
+      const { durationMs = 400 } = step.args;
+      const from = await resolvePointAbs(step.args.from, page);
+      const to = await resolvePointAbs(step.args.to, page);
+      if (!from || !to) {
         throw new Error('drag_missing_points');
       }
       await page.mouse.move(from.x, from.y);
@@ -435,9 +454,9 @@ async function executeStep(step, context) {
       break;
     }
     case 'long_press': {
-      const point = step.args.point;
+      const point = await resolvePointAbs(step.args.point, page);
       const duration = Number(step.args.durationMs || 800);
-      if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+      if (!point) {
         throw new Error('long_press_missing_xy');
       }
       await page.mouse.move(point.x, point.y);
