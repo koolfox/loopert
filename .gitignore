@@ -3,3 +3,4 @@ artifacts/
 *.log
 ms-playwright/
 .DS_Store
+.venv-browser-use/

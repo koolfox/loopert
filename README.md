@@ -46,4 +46,14 @@ If you want the original Ralph prompt/harness from snarktank/ralph:
 Make sure `ollama serve` is running and Node ≥22 for the Agent‑TARS CLI.
 
 ## Browser-Use (optional)
-Prefer local usage (PyPI) with Ollama for LLM. Cloud runner removed by default; if you need cloud, add your own script later.
+Prefer local usage (PyPI) with Ollama for LLM. Cloud runner removed by default.
+
+Local helper (Windows/PowerShell):
+```bash
+$env:BROWSER_USE_TASK="Open example.com and screenshot"
+# optional overrides:
+# $env:BROWSER_USE_MODEL="ollama/llama3" ; $env:OLLAMA_URL="http://localhost:11434"
+npm run browser-use:local
+```
+- Creates venv `.venv-browser-use`, installs `browser-use`, points LLM to Ollama’s OpenAI endpoint (`/v1`).
+- Requires Python and Ollama running locally.
