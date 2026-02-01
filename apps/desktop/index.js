@@ -262,6 +262,7 @@ def _strip(v):
 browser_path = _strip(os.getenv("BROWSER_USE_BROWSER_PATH")) or ${JSON.stringify(browserPath)}
 user_data_dir = _strip(os.getenv("BROWSER_USE_USER_DATA_DIR")) or ${JSON.stringify(userDataDir)}
 api_key = os.getenv("BROWSER_USE_API_KEY") or "ollama"
+cdp_url = _strip(os.getenv("BROWSER_USE_CDP_URL"))
 
 if os.getenv("BROWSER_USE_API_KEY"):
     llm = ChatBrowserUse()
@@ -269,11 +270,18 @@ else:
     os.environ["OLLAMA_API_BASE"] = base_url
     llm = ChatOllama(model=model)
 
-browser = Browser(
-    executable_path=browser_path,
-    user_data_dir=user_data_dir if user_data_dir else None,
-    headless=False,
-)
+if cdp_url:
+    browser = Browser(
+        cdp_url=cdp_url,
+        headless=False,
+        is_local=False,
+    )
+else:
+    browser = Browser(
+        executable_path=browser_path,
+        user_data_dir=user_data_dir if user_data_dir else None,
+        headless=False,
+    )
 
 async def main():
     agent = Agent(task=goal, browser=browser, llm=llm)
@@ -287,7 +295,9 @@ asyncio.run(main())
     BROWSER_USE_BASE_URL: llmBase,
     OLLAMA_API_BASE: llmBase,
     BROWSER_USE_BROWSER_PATH: browserPath,
-    BROWSER_USE_USER_DATA_DIR: userDataDir
+    BROWSER_USE_USER_DATA_DIR: userDataDir,
+    NO_PROXY: process.env.NO_PROXY || process.env.no_proxy || '127.0.0.1,localhost',
+    no_proxy: process.env.no_proxy || process.env.NO_PROXY || '127.0.0.1,localhost'
   };
   const res = spawnSync('python', ['-c', py], { stdio: 'inherit', env });
   if (res.status !== 0) {
