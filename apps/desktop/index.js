@@ -36,7 +36,8 @@ const DEFAULTS = {
   repl: true,
   manualDefault: true,
   disableTestSite: false,
-  workspace: 'loopert-workspace'
+  workspace: 'loopert-workspace',
+  executor: 'browser-use' // browser-use | playwright
 };
 
 function loadCliConfig(path) {
@@ -67,6 +68,7 @@ Options:
   --config <path>      Path to guardrails YAML (default: guardrails.yaml)
   --prompt-variant <computer|mobile|grounding>  Force planner prompt style
   --workspace <path>   Sandbox root for file/shell tools (default: loopert-workspace)
+  --executor <browser-use|playwright>  Choose executor (default: browser-use)
   --cli-config <path>  Path to CLI config.yaml (default: config.yaml)
   --plan <path>        Precomputed JSON plan file (bypasses planner)
   --repl               Chat-style loop: enter goals repeatedly until blank line
@@ -220,6 +222,23 @@ function createKillSignal() {
   return { aborted: false };
 }
 
+function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', taskEnv = {}) {
+  const llmBase = `${ollamaUrl.replace(/\/$/, '')}/v1`;
+  const args = [
+    '-m',
+    'browser_use',
+    'run',
+    '--model',
+    model || 'ollama/llama3',
+    '--llm-base-url',
+    llmBase,
+    '--task',
+    goal
+  ];
+  const res = spawnSync('python', args, { stdio: 'inherit', env: { ...process.env, ...taskEnv } });
+  return res.status === 0;
+}
+
 function cssEscape(value) {
   return String(value).replace(/[^a-zA-Z0-9_-]/g, (ch) => `\\${ch}`);
 }
@@ -310,6 +329,7 @@ async function main() {
     Config: flags.config || fileConfig._config || DEFAULTS.Config,
     promptVariant: flags['prompt-variant'] || fileConfig.prompt_variant,
     workspace: flags.workspace || fileConfig.workspace || DEFAULTS.workspace,
+    executor: flags.executor || fileConfig.executor || DEFAULTS.executor,
     headless:
       flags.headless === true
         ? true
@@ -349,6 +369,7 @@ async function main() {
   const configPath = merged.Config;
   const promptVariant = merged.promptVariant;
   const workspace = merged.workspace;
+  const executor = merged.executor;
   const planPath = merged.planPath;
   const llmLog = merged.llmLog;
   const replMode = Boolean(merged.repl);
@@ -402,6 +423,17 @@ async function main() {
           : 'Please navigate to a target URL, interact as needed, then snapshot.';
 
     console.log('\nRunning POC. Press Ctrl+C to trigger kill switch.');
+    if (executor === 'browser-use') {
+      const ok = runBrowserUse(
+        effectiveGoal,
+        model || 'ollama/llama3',
+        host || process.env.OLLAMA_HOST || 'http://localhost:11434'
+      );
+      console.log('\nResult:', ok ? { status: 'ok', executor: 'browser-use' } : { status: 'failed', executor: 'browser-use' });
+      if (ok) return { status: 'ok', executor: 'browser-use' };
+      console.log('browser-use failed; falling back to Playwright executor.');
+    }
+
     const result = await runPocSession({
       goal: effectiveGoal,
       model,
