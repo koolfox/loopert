@@ -236,18 +236,8 @@ function stripQuotes(val) {
   return trimmed;
 }
 
-function parseSearchQuery(goal) {
-  const match = /search\s+([^\n,]+?)(?:\sand\s| and |,|$)/i.exec(goal || '');
-  if (match && match[1]) {
-    return match[1].trim().replace(/["'<>\n]/g, '').slice(0, 120);
-  }
-  return 'openai';
-}
-
 function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', taskEnv = {}) {
   const sanitizedGoal = (goal || '').replace(/<([^>]+)>/g, '$1');
-  const searchQuery = parseSearchQuery(goal);
-  const searchUrl = `https://duckduckgo.com/?q=${encodeURIComponent(searchQuery)}`;
   const llmBase = `${ollamaUrl.replace(/\/$/, '')}/v1`;
   const browserPath = stripQuotes(process.env.BROWSER_USE_BROWSER_PATH) || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
   const userDataDir = stripQuotes(process.env.BROWSER_USE_USER_DATA_DIR) || '';
@@ -293,6 +283,10 @@ else:
         user_data_dir=user_data_dir if user_data_dir else None,
         headless=False,
         allowed_domains=None,
+        accept_downloads=False,
+        minimum_wait_page_load_time=0.5,
+        wait_for_network_idle_page_load_time=0.8,
+        wait_between_actions=0.4,
     )
 
 async def main():
@@ -301,7 +295,11 @@ async def main():
         browser=browser,
         llm=llm,
         directly_open_url=False,
-        initial_actions=[{'action': 'navigate', 'params': {'url': "${searchUrl}"}}],
+        max_failures=3,
+        step_timeout=45,
+        max_actions_per_step=3,
+        use_thinking=True,
+        extend_system_message="If navigation or clicks fail, try: refresh, wait 1s, scroll down, and use keyboard Tab/Enter to accept dialogs or submit forms. Actively dismiss cookie/consent popups by clicking buttons with text accept/agree/continue/allow. If you detect captcha or human verification, stop and report the block. Use go_back if stuck on blank/blocked pages. Only take screenshots when the page or URL changes.",
     )
     await agent.run()
 
