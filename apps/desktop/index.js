@@ -237,6 +237,7 @@ function stripQuotes(val) {
 }
 
 function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', taskEnv = {}) {
+  const sanitizedGoal = (goal || '').replace(/<([^>]+)>/g, '$1');
   const llmBase = `${ollamaUrl.replace(/\/$/, '')}/v1`;
   const browserPath = stripQuotes(process.env.BROWSER_USE_BROWSER_PATH) || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
   const userDataDir = stripQuotes(process.env.BROWSER_USE_USER_DATA_DIR) || '';
@@ -245,11 +246,10 @@ function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', taskEn
   }
   const py = `
 import os, asyncio
-from browser_use import Agent, Browser, Tools
+from browser_use import Agent, Browser
 from browser_use.llm import ChatOllama, ChatBrowserUse
-from browser_use.tools.service import ActionResult
 
-goal = ${JSON.stringify(goal)}
+goal = ${JSON.stringify(sanitizedGoal)}
 model = os.getenv("BROWSER_USE_MODEL") or "${model || 'mistral:7b-instruct-q4_K_M'}"
 base_url = os.getenv("BROWSER_USE_BASE_URL") or "${llmBase}"
 def _strip(v):
@@ -286,18 +286,6 @@ else:
     )
 
 tools = Tools()
-
-@tools.action(description='navigate to url')
-async def navigate(url: str, browser_session) -> ActionResult:
-    url = (url or '').strip()
-    if url.startswith('<') and url.endswith('>'):
-        url = url[1:-1].strip()
-    if url.startswith('www.'):
-        url = 'https://' + url
-    if not url.startswith('http'):
-        url = 'https://' + url
-    await browser_session.navigate(url)
-    return ActionResult(extracted_content=f'navigated to {url}')
 
 async def main():
     agent = Agent(task=goal, browser=browser, llm=llm, tools=tools)
