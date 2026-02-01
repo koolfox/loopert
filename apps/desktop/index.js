@@ -229,32 +229,41 @@ function createKillSignal() {
 
 function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', taskEnv = {}) {
   const llmBase = `${ollamaUrl.replace(/\/$/, '')}/v1`;
-  const browserPath = process.env.BROWSER_USE_BROWSER_PATH;
-  const userDataDir = process.env.BROWSER_USE_USER_DATA_DIR;
-  const baseArgs = ['run', '--task', goal];
-  baseArgs.push('--browser', 'real');
-  if (browserPath) {
-    baseArgs.push('--browser-path', browserPath);
-  }
-  if (userDataDir) {
-    baseArgs.push('--user-data-dir', userDataDir);
-  }
-  const env = {
-    ...process.env,
-    ...taskEnv,
-    BROWSER_USE_MODEL: model || process.env.BROWSER_USE_MODEL || 'ollama/llama3',
-    BROWSER_USE_BASE_URL: llmBase
-  };
-  let res = spawnSync('browser-use', baseArgs, { stdio: 'inherit', env });
+  const browserPath = process.env.BROWSER_USE_BROWSER_PATH || '"C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe"';
+  const userDataDir = process.env.BROWSER_USE_USER_DATA_DIR || '';
+  const py = `
+import os, asyncio
+from browser_use import Agent, Browser
+from browser_use.llm import ChatOpenAI, ChatBrowserUse
+
+goal = ${JSON.stringify(goal)}
+model = os.getenv("BROWSER_USE_MODEL") or "${model || 'ChatBrowserUse'}"
+base_url = os.getenv("BROWSER_USE_BASE_URL") or "${llmBase}"
+browser_path = os.getenv("BROWSER_USE_BROWSER_PATH") or ${JSON.stringify(browserPath)}
+user_data_dir = os.getenv("BROWSER_USE_USER_DATA_DIR") or ${JSON.stringify(userDataDir)}
+api_key = os.getenv("BROWSER_USE_API_KEY") or "ollama"
+
+if os.getenv("BROWSER_USE_API_KEY"):
+    llm = ChatBrowserUse()
+else:
+    llm = ChatOpenAI(model=model, api_key=api_key, base_url=base_url)
+
+browser = Browser(
+    executable_path=browser_path,
+    user_data_dir=user_data_dir if user_data_dir else None,
+    headless=False,
+)
+
+async def main():
+    agent = Agent(task=goal, browser=browser, llm=llm)
+    await agent.run()
+
+asyncio.run(main())
+`;
+  const env = { ...process.env, ...taskEnv, BROWSER_USE_BASE_URL: llmBase };
+  const res = spawnSync('python', ['-c', py], { stdio: 'inherit', env });
   if (res.status !== 0) {
-    // retry via python -m browser_use.cli run ...
-    const pyArgs = ['-m', 'browser_use.cli', ...baseArgs];
-    res = spawnSync('python', pyArgs, { stdio: 'inherit', env });
-  }
-  if (res.status !== 0) {
-    console.error(
-      'browser-use missing or CLI changed. Install/upgrade with: pip install "browser-use[cli]" --upgrade (or npm run browser-use:local once)'
-    );
+    console.error('browser-use run failed. Ensure browser-use is installed and Chrome profile path is valid.');
   }
   return res.status === 0;
 }
