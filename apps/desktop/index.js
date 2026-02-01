@@ -227,10 +227,22 @@ function createKillSignal() {
   return { aborted: false };
 }
 
+function stripQuotes(val) {
+  if (!val || typeof val !== 'string') return val;
+  const trimmed = val.trim();
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
 function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', taskEnv = {}) {
   const llmBase = `${ollamaUrl.replace(/\/$/, '')}/v1`;
-  const browserPath = process.env.BROWSER_USE_BROWSER_PATH || '"C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe"';
-  const userDataDir = process.env.BROWSER_USE_USER_DATA_DIR || '';
+  const browserPath = stripQuotes(process.env.BROWSER_USE_BROWSER_PATH) || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+  const userDataDir = stripQuotes(process.env.BROWSER_USE_USER_DATA_DIR) || '';
+  if (userDataDir) {
+    ensureDir(userDataDir);
+  }
   const py = `
 import os, asyncio
 from browser_use import Agent, Browser
@@ -239,8 +251,16 @@ from browser_use.llm import ChatOllama, ChatBrowserUse
 goal = ${JSON.stringify(goal)}
 model = os.getenv("BROWSER_USE_MODEL") or "${model || 'mistral:7b-instruct-q4_K_M'}"
 base_url = os.getenv("BROWSER_USE_BASE_URL") or "${llmBase}"
-browser_path = os.getenv("BROWSER_USE_BROWSER_PATH") or ${JSON.stringify(browserPath)}
-user_data_dir = os.getenv("BROWSER_USE_USER_DATA_DIR") or ${JSON.stringify(userDataDir)}
+def _strip(v):
+    if not v:
+        return v
+    v = v.strip()
+    if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+        return v[1:-1]
+    return v
+
+browser_path = _strip(os.getenv("BROWSER_USE_BROWSER_PATH")) or ${JSON.stringify(browserPath)}
+user_data_dir = _strip(os.getenv("BROWSER_USE_USER_DATA_DIR")) or ${JSON.stringify(userDataDir)}
 api_key = os.getenv("BROWSER_USE_API_KEY") or "ollama"
 
 if os.getenv("BROWSER_USE_API_KEY"):
@@ -261,7 +281,14 @@ async def main():
 
 asyncio.run(main())
 `;
-  const env = { ...process.env, ...taskEnv, BROWSER_USE_BASE_URL: llmBase, OLLAMA_API_BASE: llmBase };
+  const env = {
+    ...process.env,
+    ...taskEnv,
+    BROWSER_USE_BASE_URL: llmBase,
+    OLLAMA_API_BASE: llmBase,
+    BROWSER_USE_BROWSER_PATH: browserPath,
+    BROWSER_USE_USER_DATA_DIR: userDataDir
+  };
   const res = spawnSync('python', ['-c', py], { stdio: 'inherit', env });
   if (res.status !== 0) {
     console.error('browser-use run failed. Ensure browser-use is installed and Chrome profile path is valid.');
