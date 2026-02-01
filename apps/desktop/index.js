@@ -287,7 +287,7 @@ else:
 
 tools = Tools()
 
-@tools.action(description='navigate to url', aliases=['navigate'])
+@tools.action(description='navigate to url')
 async def navigate(url: str, browser_session) -> ActionResult:
     url = (url or '').strip()
     if url.startswith('<') and url.endswith('>'):
