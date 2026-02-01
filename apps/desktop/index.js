@@ -225,8 +225,9 @@ function createKillSignal() {
 
 function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', taskEnv = {}) {
   const llmBase = `${ollamaUrl.replace(/\/$/, '')}/v1`;
+  const browserPath = process.env.BROWSER_USE_BROWSER_PATH;
+  const userDataDir = process.env.BROWSER_USE_USER_DATA_DIR;
   const baseArgs = [
-    'run',
     '--model',
     model || 'ollama/llama3',
     '--llm-base-url',
@@ -234,15 +235,28 @@ function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', taskEn
     '--task',
     goal
   ];
+  if (browserPath) {
+    baseArgs.push('--browser-path', browserPath);
+  }
+  if (userDataDir) {
+    baseArgs.push('--user-data-dir', userDataDir);
+  }
   const env = { ...process.env, ...taskEnv };
-  let res = spawnSync('browser_use', baseArgs, { stdio: 'inherit', env });
+  let res = spawnSync('browser-use', baseArgs, { stdio: 'inherit', env });
   if (res.status !== 0) {
-    // retry via python -m browser_use.cli
+    // retry via python -m browser_use.cli (without subcommand)
     const pyArgs = ['-m', 'browser_use.cli', ...baseArgs];
     res = spawnSync('python', pyArgs, { stdio: 'inherit', env });
   }
   if (res.status !== 0) {
-    console.error('browser-use missing? Install via: pip install browser-use (or npm run browser-use:local once)');
+    // legacy: python -m browser_use cli run
+    const pyArgs = ['-m', 'browser_use.cli', 'run', ...baseArgs];
+    res = spawnSync('python', pyArgs, { stdio: 'inherit', env });
+  }
+  if (res.status !== 0) {
+    console.error(
+      'browser-use missing or outdated. Install/upgrade with: pip install "browser-use[cli]" --upgrade (or npm run browser-use:local once)'
+    );
   }
   return res.status === 0;
 }
