@@ -247,7 +247,7 @@ function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', taskEn
 import os, asyncio
 from browser_use import Agent, Browser, Tools
 from browser_use.llm import ChatOllama, ChatBrowserUse
-from browser_use.tools import ActionResult
+from browser_use.tools.service import ActionResult
 
 goal = ${JSON.stringify(goal)}
 model = os.getenv("BROWSER_USE_MODEL") or "${model || 'mistral:7b-instruct-q4_K_M'}"
