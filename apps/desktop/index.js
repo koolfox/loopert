@@ -3,6 +3,7 @@ import fs from 'fs';
 import http from 'http';
 import yaml from 'js-yaml';
 import { stdin as input, stdout as output } from 'node:process';
+import { spawnSync } from 'child_process';
 import { chromium } from 'playwright';
 import readline from 'readline/promises';
 
