@@ -284,7 +284,7 @@ function buildMessages(input, policyHint, promptVariant) {
         .filter(Boolean)
         .join('\n\n')
     }
-  ];
+  ].filter(Boolean);
 }
 
 function createClient(host) {
@@ -324,6 +324,7 @@ export async function planGoal(goalInput, options = {}) {
     policyHint,
     promptVariant
   );
+  messages = messages.filter(Boolean);
   let lastRaw;
 
   for (let attempt = 0; attempt < 2; attempt++) {

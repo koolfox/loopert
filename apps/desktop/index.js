@@ -237,6 +237,9 @@ function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', taskEn
     goal
   ];
   const res = spawnSync('python', args, { stdio: 'inherit', env: { ...process.env, ...taskEnv } });
+  if (res.status !== 0) {
+    console.error('browser-use missing? Install via: npm run browser-use:local');
+  }
   return res.status === 0;
 }
 
