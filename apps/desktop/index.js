@@ -236,8 +236,18 @@ function stripQuotes(val) {
   return trimmed;
 }
 
+function parseSearchQuery(goal) {
+  const match = /search\s+([^\n,]+?)(?:\sand\s| and |,|$)/i.exec(goal || '');
+  if (match && match[1]) {
+    return match[1].trim().replace(/["'<>\n]/g, '').slice(0, 120);
+  }
+  return 'openai';
+}
+
 function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', taskEnv = {}) {
   const sanitizedGoal = (goal || '').replace(/<([^>]+)>/g, '$1');
+  const searchQuery = parseSearchQuery(goal);
+  const searchUrl = `https://duckduckgo.com/?q=${encodeURIComponent(searchQuery)}`;
   const llmBase = `${ollamaUrl.replace(/\/$/, '')}/v1`;
   const browserPath = stripQuotes(process.env.BROWSER_USE_BROWSER_PATH) || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
   const userDataDir = stripQuotes(process.env.BROWSER_USE_USER_DATA_DIR) || '';
@@ -286,7 +296,13 @@ else:
     )
 
 async def main():
-    agent = Agent(task=goal, browser=browser, llm=llm)
+    agent = Agent(
+        task=goal,
+        browser=browser,
+        llm=llm,
+        directly_open_url=False,
+        initial_actions=[{'action': 'navigate', 'params': {'url': "${searchUrl}"}}],
+    )
     await agent.run()
 
 asyncio.run(main())
