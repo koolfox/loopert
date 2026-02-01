@@ -18,7 +18,7 @@
     "ralph:fetch": "node scripts/ralph-fetch.js",
     "ollama:pull-tars": "ollama pull 0000/ui-tars-1.5-7b",
     "agent-tars:ollama": "npx @agent-tars/cli --provider openai --apiBase http://localhost:11434/v1 --apiKey dummy --model ui-tars-1.5-7b",
-    "browser-use:local": "pwsh -File scripts/browser-use-local.ps1",
+    "browser-use:local": "node scripts/browser-use-local.js",
     "test": "npm run smoke"
   },
   "keywords": [],
