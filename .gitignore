@@ -4,3 +4,5 @@ artifacts/
 ms-playwright/
 .DS_Store
 .venv-browser-use/
+.chrome-profile/
+.chrome-profile**
