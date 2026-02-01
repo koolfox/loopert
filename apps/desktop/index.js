@@ -246,7 +246,8 @@ api_key = os.getenv("BROWSER_USE_API_KEY") or "ollama"
 if os.getenv("BROWSER_USE_API_KEY"):
     llm = ChatBrowserUse()
 else:
-    llm = ChatOllama(model=model, base_url=base_url)
+    os.environ["OLLAMA_API_BASE"] = base_url
+    llm = ChatOllama(model=model)
 
 browser = Browser(
     executable_path=browser_path,
@@ -260,7 +261,7 @@ async def main():
 
 asyncio.run(main())
 `;
-  const env = { ...process.env, ...taskEnv, BROWSER_USE_BASE_URL: llmBase };
+  const env = { ...process.env, ...taskEnv, BROWSER_USE_BASE_URL: llmBase, OLLAMA_API_BASE: llmBase };
   const res = spawnSync('python', ['-c', py], { stdio: 'inherit', env });
   if (res.status !== 0) {
     console.error('browser-use run failed. Ensure browser-use is installed and Chrome profile path is valid.');
