@@ -234,10 +234,10 @@ function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', taskEn
   const py = `
 import os, asyncio
 from browser_use import Agent, Browser
-from browser_use.llm import ChatOpenAI, ChatBrowserUse
+from browser_use.llm import ChatOllama, ChatBrowserUse
 
 goal = ${JSON.stringify(goal)}
-model = os.getenv("BROWSER_USE_MODEL") or "${model || 'ChatBrowserUse'}"
+model = os.getenv("BROWSER_USE_MODEL") or "${model || 'mistral:7b-instruct-q4_K_M'}"
 base_url = os.getenv("BROWSER_USE_BASE_URL") or "${llmBase}"
 browser_path = os.getenv("BROWSER_USE_BROWSER_PATH") or ${JSON.stringify(browserPath)}
 user_data_dir = os.getenv("BROWSER_USE_USER_DATA_DIR") or ${JSON.stringify(userDataDir)}
@@ -246,7 +246,7 @@ api_key = os.getenv("BROWSER_USE_API_KEY") or "ollama"
 if os.getenv("BROWSER_USE_API_KEY"):
     llm = ChatBrowserUse()
 else:
-    llm = ChatOpenAI(model=model, api_key=api_key, base_url=base_url)
+    llm = ChatOllama(model=model, base_url=base_url)
 
 browser = Browser(
     executable_path=browser_path,
