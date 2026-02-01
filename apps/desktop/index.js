@@ -245,8 +245,9 @@ function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', taskEn
   }
   const py = `
 import os, asyncio
-from browser_use import Agent, Browser
+from browser_use import Agent, Browser, Tools
 from browser_use.llm import ChatOllama, ChatBrowserUse
+from browser_use.tools import ActionResult
 
 goal = ${JSON.stringify(goal)}
 model = os.getenv("BROWSER_USE_MODEL") or "${model || 'mistral:7b-instruct-q4_K_M'}"
@@ -281,10 +282,25 @@ else:
         executable_path=browser_path,
         user_data_dir=user_data_dir if user_data_dir else None,
         headless=False,
+        allowed_domains=None,
     )
 
+tools = Tools()
+
+@tools.action(description='navigate to url', aliases=['navigate'])
+async def navigate(url: str, browser_session) -> ActionResult:
+    url = (url or '').strip()
+    if url.startswith('<') and url.endswith('>'):
+        url = url[1:-1].strip()
+    if url.startswith('www.'):
+        url = 'https://' + url
+    if not url.startswith('http'):
+        url = 'https://' + url
+    await browser_session.navigate(url)
+    return ActionResult(extracted_content=f'navigated to {url}')
+
 async def main():
-    agent = Agent(task=goal, browser=browser, llm=llm)
+    agent = Agent(task=goal, browser=browser, llm=llm, tools=tools)
     await agent.run()
 
 asyncio.run(main())
