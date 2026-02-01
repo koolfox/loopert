@@ -285,10 +285,8 @@ else:
         allowed_domains=None,
     )
 
-tools = Tools()
-
 async def main():
-    agent = Agent(task=goal, browser=browser, llm=llm, tools=tools)
+    agent = Agent(task=goal, browser=browser, llm=llm)
     await agent.run()
 
 asyncio.run(main())
