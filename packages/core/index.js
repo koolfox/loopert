@@ -815,16 +815,38 @@ export async function runPocSession(options) {
             ? JSON.stringify(planResult.details)
             : planResult.details || '';
         const rawMsg = planResult.raw ? ` Raw: ${String(planResult.raw).slice(0, 400)}...` : '';
-        onUpdate(
-          kleur.red(
-            `Planner error (${planResult.error}) ${detailMsg ? `details=${detailMsg}` : ''}${rawMsg}`
-          )
-        );
-        await browser.close();
-        return { status: 'planner_error', detail: planResult };
+        // fallback stub for simple search goals
+        if (planResult.error === 'schema_validation_failed') {
+          const queryMatch = goal.match(/search\s+(.+?)(,|$)/i);
+          const query = encodeURIComponent(queryMatch ? queryMatch[1].trim() : goal.trim());
+          const searchUrl = `https://www.google.com/search?q=${query}`;
+          plan = {
+            plan_id: `fallback-${Date.now()}`,
+            autonomy_level: capabilityProfile || 'assisted',
+            reasoning_summary: 'Fallback web search plan due to planner schema failure',
+            steps: [
+              { tool: 'navigate', args: { url: searchUrl }, explanation: 'open search page', estimated_risk: 'medium', confidence: 0.8 },
+              { tool: 'wait_for_idle', args: { timeoutMs: 1200 }, explanation: 'wait for results', estimated_risk: 'low', confidence: 0.8 },
+              { tool: 'snapshot', args: {}, explanation: 'capture results', estimated_risk: 'low', confidence: 0.9 }
+            ]
+          };
+          planSource = 'fallback';
+          llmRaw = planResult.raw;
+          onUpdate(kleur.yellow('Planner failed; using fallback search plan.'));
+        } else {
+          onUpdate(
+            kleur.red(
+              `Planner error (${planResult.error}) ${detailMsg ? `details=${detailMsg}` : ''}${rawMsg}`
+            )
+          );
+          await browser.close();
+          return { status: 'planner_error', detail: planResult };
+        }
       }
-      plan = planResult.plan;
-      llmRaw = planResult.raw;
+      if (!plan) {
+        plan = planResult.plan;
+        llmRaw = planResult.raw;
+      }
     }
 
     // coordinate normalization and clipping

@@ -225,9 +225,7 @@ function createKillSignal() {
 
 function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', taskEnv = {}) {
   const llmBase = `${ollamaUrl.replace(/\/$/, '')}/v1`;
-  const args = [
-    '-m',
-    'browser_use',
+  const baseArgs = [
     'run',
     '--model',
     model || 'ollama/llama3',
@@ -236,9 +234,15 @@ function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', taskEn
     '--task',
     goal
   ];
-  const res = spawnSync('python', args, { stdio: 'inherit', env: { ...process.env, ...taskEnv } });
+  const env = { ...process.env, ...taskEnv };
+  let res = spawnSync('browser_use', baseArgs, { stdio: 'inherit', env });
   if (res.status !== 0) {
-    console.error('browser-use missing? Install via: npm run browser-use:local');
+    // retry via python -m browser_use.cli
+    const pyArgs = ['-m', 'browser_use.cli', ...baseArgs];
+    res = spawnSync('python', pyArgs, { stdio: 'inherit', env });
+  }
+  if (res.status !== 0) {
+    console.error('browser-use missing? Install via: pip install browser-use (or npm run browser-use:local once)');
   }
   return res.status === 0;
 }
