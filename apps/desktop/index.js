@@ -39,7 +39,8 @@ const DEFAULTS = {
   disableTestSite: false,
   workspace: 'loopert-workspace',
   executor: 'browser-use', // browser-use | playwright
-  keepOpen: false
+  keepOpen: false,
+  fallbackPlaywright: false
 };
 
 function loadCliConfig(path) {
@@ -72,6 +73,7 @@ Options:
   --workspace <path>   Sandbox root for file/shell tools (default: loopert-workspace)
   --executor <browser-use|playwright>  Choose executor (default: browser-use)
   --keep-open          Do not close Playwright browser after execution (debug/manual follow-up)
+  --fallback-playwright Allow Playwright fallback if browser-use fails (default: false)
   --cli-config <path>  Path to CLI config.yaml (default: config.yaml)
   --plan <path>        Precomputed JSON plan file (bypasses planner)
   --repl               Chat-style loop: enter goals repeatedly until blank line
@@ -390,6 +392,10 @@ async function main() {
     workspace: flags.workspace || fileConfig.workspace || DEFAULTS.workspace,
     executor: flags.executor || fileConfig.executor || DEFAULTS.executor,
     keepOpen: Boolean(flags['keep-open'] || fileConfig.keep_open || DEFAULTS.keepOpen),
+    fallbackPlaywright:
+      flags['fallback-playwright'] !== undefined
+        ? Boolean(flags['fallback-playwright'])
+        : fileConfig.fallback_playwright ?? DEFAULTS.fallbackPlaywright,
     headless:
       flags.headless === true
         ? true
@@ -431,6 +437,7 @@ async function main() {
   const workspace = merged.workspace;
   const executor = merged.executor;
   const keepOpen = merged.keepOpen;
+  const fallbackPlaywright = merged.fallbackPlaywright;
   const planPath = merged.planPath;
   const llmLog = merged.llmLog;
   const replMode = Boolean(merged.repl);
@@ -483,13 +490,6 @@ async function main() {
           ? `Navigate to ${url}, type "Jane Doe" into field with id "name", type "jane@example.com" into field with id "email", click the button with id "submit", wait_for_idle for 800ms, then snapshot.`
           : 'Please navigate to a target URL, interact as needed, then snapshot.';
 
-    const googleMatch = effectiveGoal.match(/google\.com\s+search\s+([^,]+?)(,|$)/i);
-    if (googleMatch) {
-      const query = googleMatch[1].trim();
-      console.log(`Detected Google search intent. Running deterministic Playwright flow for query: ${query}`);
-      return runDeterministicGoogleSearch(query, { headless, devtools, keepOpen });
-    }
-
     console.log('\nRunning POC. Press Ctrl+C to trigger kill switch.');
     if (executor === 'browser-use') {
       const ok = runBrowserUse(
@@ -499,6 +499,9 @@ async function main() {
       );
       console.log('\nResult:', ok ? { status: 'ok', executor: 'browser-use' } : { status: 'failed', executor: 'browser-use' });
       if (ok) return { status: 'ok', executor: 'browser-use' };
+      if (!fallbackPlaywright) {
+        return { status: 'failed', executor: 'browser-use' };
+      }
       console.log('browser-use failed; falling back to Playwright executor.');
     }
 
