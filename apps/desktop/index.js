@@ -25,7 +25,7 @@ function parseArgs(rawArgs) {
 }
 
 const DEFAULTS = {
-  model: process.env.OLLAMA_MODEL,
+  model: process.env.OLLAMA_MODEL || 'qwen3:30b',
   host: process.env.OLLAMA_HOST,
   profile: 'default',
   headless: false,
@@ -250,7 +250,7 @@ from browser_use import Agent, Browser
 from browser_use.llm import ChatOllama, ChatBrowserUse
 
 goal = ${JSON.stringify(sanitizedGoal)}
-model = os.getenv("BROWSER_USE_MODEL") or "${model || 'mistral:7b-instruct-q4_K_M'}"
+model = os.getenv("BROWSER_USE_MODEL") or "${model || 'qwen3:30b'}"
 base_url = os.getenv("BROWSER_USE_BASE_URL") or "${llmBase}"
 def _strip(v):
     if not v:
