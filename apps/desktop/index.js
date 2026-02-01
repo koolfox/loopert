@@ -296,9 +296,10 @@ async def main():
         llm=llm,
         directly_open_url=False,
         max_failures=3,
-        step_timeout=45,
         max_actions_per_step=3,
         use_thinking=True,
+        llm_timeout=120,
+        step_timeout=180,
         extend_system_message="If navigation or clicks fail, try: refresh, wait 1s, scroll down, and use keyboard Tab/Enter to accept dialogs or submit forms. Actively dismiss cookie/consent popups by clicking buttons with text accept/agree/continue/allow. If you detect captcha or human verification, stop and report the block. Use go_back if stuck on blank/blocked pages. Only take screenshots when the page or URL changes.",
     )
     await agent.run()
