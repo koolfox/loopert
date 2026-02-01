@@ -228,6 +228,7 @@ function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', taskEn
   const browserPath = process.env.BROWSER_USE_BROWSER_PATH;
   const userDataDir = process.env.BROWSER_USE_USER_DATA_DIR;
   const baseArgs = [
+    'run',
     '--model',
     model || 'ollama/llama3',
     '--llm-base-url',
@@ -235,6 +236,7 @@ function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', taskEn
     '--task',
     goal
   ];
+  baseArgs.push('--browser', 'real');
   if (browserPath) {
     baseArgs.push('--browser-path', browserPath);
   }
@@ -244,13 +246,8 @@ function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', taskEn
   const env = { ...process.env, ...taskEnv };
   let res = spawnSync('browser-use', baseArgs, { stdio: 'inherit', env });
   if (res.status !== 0) {
-    // retry via python -m browser_use.cli (without subcommand)
+    // retry via python -m browser_use.cli run ...
     const pyArgs = ['-m', 'browser_use.cli', ...baseArgs];
-    res = spawnSync('python', pyArgs, { stdio: 'inherit', env });
-  }
-  if (res.status !== 0) {
-    // legacy: python -m browser_use cli run
-    const pyArgs = ['-m', 'browser_use.cli', 'run', ...baseArgs];
     res = spawnSync('python', pyArgs, { stdio: 'inherit', env });
   }
   if (res.status !== 0) {

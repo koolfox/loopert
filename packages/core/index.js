@@ -819,7 +819,7 @@ export async function runPocSession(options) {
         if (planResult.error === 'schema_validation_failed') {
           const queryMatch = goal.match(/search\s+(.+?)(,|$)/i);
           const query = encodeURIComponent(queryMatch ? queryMatch[1].trim() : goal.trim());
-          const searchUrl = `https://www.google.com/search?q=${query}`;
+          const searchUrl = `https://duckduckgo.com/?q=${query}`;
           plan = {
             plan_id: `fallback-${Date.now()}`,
             autonomy_level: capabilityProfile || 'assisted',
