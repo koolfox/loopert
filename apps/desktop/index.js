@@ -38,7 +38,8 @@ const DEFAULTS = {
   manualDefault: true,
   disableTestSite: false,
   workspace: 'loopert-workspace',
-  executor: 'browser-use' // browser-use | playwright
+  executor: 'browser-use', // browser-use | playwright
+  keepOpen: false
 };
 
 function loadCliConfig(path) {
@@ -70,6 +71,7 @@ Options:
   --prompt-variant <computer|mobile|grounding>  Force planner prompt style
   --workspace <path>   Sandbox root for file/shell tools (default: loopert-workspace)
   --executor <browser-use|playwright>  Choose executor (default: browser-use)
+  --keep-open          Do not close Playwright browser after execution (debug/manual follow-up)
   --cli-config <path>  Path to CLI config.yaml (default: config.yaml)
   --plan <path>        Precomputed JSON plan file (bypasses planner)
   --repl               Chat-style loop: enter goals repeatedly until blank line
@@ -258,6 +260,44 @@ function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', taskEn
   return res.status === 0;
 }
 
+async function runDeterministicGoogleSearch(query, options) {
+  const { headless, devtools, keepOpen } = options;
+  const artifactsDir = 'artifacts';
+  ensureDir(artifactsDir);
+  const browser = await chromium.launch({ headless, devtools });
+  const context = await browser.newContext();
+  const page = await context.newPage();
+
+  const snap = async (label) => {
+    const file = `${artifactsDir}/google-${label}-${Date.now()}.png`;
+    await page.screenshot({ path: file, fullPage: true });
+    console.log(`snapshot: ${file}`);
+  };
+
+  await page.goto('https://www.google.com/?hl=en', { waitUntil: 'domcontentloaded' });
+  await snap('landing');
+
+  const box = page.locator('textarea[name="q"], input[name="q"]').first();
+  await box.fill(query, { timeout: 8000 });
+  await box.press('Enter');
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForTimeout(1200);
+  await snap('results');
+
+  const firstResult = page.locator('h3').first();
+  await firstResult.click({ timeout: 8000 });
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForTimeout(1200);
+  await snap('opened-result');
+
+  if (!keepOpen) {
+    await browser.close();
+  } else {
+    console.log('Browser left open; close manually when done.');
+  }
+  return { status: 'ok', executor: 'deterministic-google' };
+}
+
 function cssEscape(value) {
   return String(value).replace(/[^a-zA-Z0-9_-]/g, (ch) => `\\${ch}`);
 }
@@ -349,6 +389,7 @@ async function main() {
     promptVariant: flags['prompt-variant'] || fileConfig.prompt_variant,
     workspace: flags.workspace || fileConfig.workspace || DEFAULTS.workspace,
     executor: flags.executor || fileConfig.executor || DEFAULTS.executor,
+    keepOpen: Boolean(flags['keep-open'] || fileConfig.keep_open || DEFAULTS.keepOpen),
     headless:
       flags.headless === true
         ? true
@@ -389,6 +430,7 @@ async function main() {
   const promptVariant = merged.promptVariant;
   const workspace = merged.workspace;
   const executor = merged.executor;
+  const keepOpen = merged.keepOpen;
   const planPath = merged.planPath;
   const llmLog = merged.llmLog;
   const replMode = Boolean(merged.repl);
@@ -440,6 +482,13 @@ async function main() {
         : url
           ? `Navigate to ${url}, type "Jane Doe" into field with id "name", type "jane@example.com" into field with id "email", click the button with id "submit", wait_for_idle for 800ms, then snapshot.`
           : 'Please navigate to a target URL, interact as needed, then snapshot.';
+
+    const googleMatch = effectiveGoal.match(/google\.com\s+search\s+([^,]+?)(,|$)/i);
+    if (googleMatch) {
+      const query = googleMatch[1].trim();
+      console.log(`Detected Google search intent. Running deterministic Playwright flow for query: ${query}`);
+      return runDeterministicGoogleSearch(query, { headless, devtools, keepOpen });
+    }
 
     console.log('\nRunning POC. Press Ctrl+C to trigger kill switch.');
     if (executor === 'browser-use') {
