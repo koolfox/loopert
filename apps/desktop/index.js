@@ -1,9 +1,9 @@
 import { runPocSession } from '@loopert/core';
+import { spawnSync } from 'child_process';
 import fs from 'fs';
 import http from 'http';
 import yaml from 'js-yaml';
 import { stdin as input, stdout as output } from 'node:process';
-import { spawnSync } from 'child_process';
 import { chromium } from 'playwright';
 import readline from 'readline/promises';
 
@@ -25,7 +25,7 @@ function parseArgs(rawArgs) {
 }
 
 const DEFAULTS = {
-  model: process.env.OLLAMA_MODEL || 'qwen3:30b',
+  model: process.env.OLLAMA_MODEL || 'gemma3n:e4b',
   host: process.env.OLLAMA_HOST,
   profile: 'default',
   headless: false,
@@ -250,7 +250,7 @@ from browser_use import Agent, Browser
 from browser_use.llm import ChatOllama, ChatBrowserUse
 
 goal = ${JSON.stringify(sanitizedGoal)}
-model = os.getenv("BROWSER_USE_MODEL") or "${model || 'qwen3:30b'}"
+model = os.getenv("BROWSER_USE_MODEL") or "${model || 'gemma3n:e4b'}"
 base_url = os.getenv("BROWSER_USE_BASE_URL") or "${llmBase}"
 def _strip(v):
     if not v:
@@ -300,7 +300,7 @@ async def main():
         use_thinking=True,
         llm_timeout=120,
         step_timeout=180,
-        extend_system_message="If navigation or clicks fail, try: refresh, wait 1s, scroll down, and use keyboard Tab/Enter to accept dialogs or submit forms. Actively dismiss cookie/consent popups by clicking buttons with text accept/agree/continue/allow. If you detect captcha or human verification, stop and report the block. Use go_back if stuck on blank/blocked pages. Only take screenshots when the page or URL changes.",
+        extend_system_message="After each page load, check for overlays/popups/dialogs in any language. If one blocks interaction, first try to close/reject/decline it; only accept if reject is missing. Prioritize buttons with text matching (case/locale-insensitive): reject/decline/refuse/no/later, then accept/agree/allow/consent/continue. Multi-language hints include: accepter, accepter tout, refuser, rejeter, autoriser, continuer (fr); akzeptieren, ablehnen (de); aceptar, rechazar, continuar (es); accetta, rifiuta (it); aceitar, recusar (pt); accepteren, weigeren (nl); godta, avslå (no); acceptera, avvisa, avböj (sv); acceptere, afslå (da); hyväksy, hylkää (fi); принять, отклонить (ru); 同意, 拒否, 許可, 続行 (ja); 동의, 거부 (ko); 接受, 拒绝 (zh). If labels are unclear, use keyboard navigation (Tab/Enter/Escape) or close icon (x/✕). If navigation or clicks fail, try refresh, wait 1s, scroll down. If captcha/human verification appears, stop and report. Use go_back if stuck on blank/blocked pages. Only take screenshots when the page or URL changes.",
     )
     await agent.run()
 
