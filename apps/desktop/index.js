@@ -402,8 +402,16 @@ async def main():
         import json, pathlib
         out_dir = pathlib.Path(artifacts_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
+        actions_raw = history.action_history()
+        def to_jsonable(x):
+            if hasattr(x, "model_dump"):
+                return x.model_dump()
+            if hasattr(x, "__dict__"):
+                return x.__dict__
+            return str(x)
+        actions = [to_jsonable(a) for a in actions_raw] if actions_raw else []
         with open(out_dir / "history.json", "w", encoding="utf-8") as f:
-            json.dump(history.action_history(), f, ensure_ascii=False, indent=2)
+            json.dump(actions, f, ensure_ascii=False, indent=2)
         with open(out_dir / "history-urls.json", "w", encoding="utf-8") as f:
             json.dump(history.urls(), f, ensure_ascii=False, indent=2)
     except Exception as e:
