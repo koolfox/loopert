@@ -1,5 +1,5 @@
 import { runPocSession } from '@loopert/core';
-import { spawnSync } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import fs from 'fs';
 import http from 'http';
 import yaml from 'js-yaml';
@@ -240,7 +240,7 @@ function stripQuotes(val) {
   return trimmed;
 }
 
-function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', opts = {}) {
+async function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', opts = {}) {
   const { supervised = false, supervisedMode = 'assist', taskEnv = {} } = opts || {};
   const sanitizedGoal = (goal || '').replace(/<([^>]+)>/g, '$1');
   const llmBase = `${ollamaUrl.replace(/\/$/, '')}/v1`;
@@ -345,11 +345,29 @@ asyncio.run(main())
     NO_PROXY: process.env.NO_PROXY || process.env.no_proxy || '127.0.0.1,localhost',
     no_proxy: process.env.no_proxy || process.env.NO_PROXY || '127.0.0.1,localhost'
   };
-  const res = spawnSync('python', ['-c', py], { stdio: 'inherit', env });
-  if (res.status !== 0) {
-    console.error('browser-use run failed. Ensure browser-use is installed and Chrome profile path is valid.');
-  }
-  return res.status === 0;
+  return await new Promise((resolve) => {
+    const child = spawn('python', ['-c', py], { stdio: 'inherit', env });
+
+    const handleSigint = () => {
+      if (!child.killed) {
+        console.log('Forwarding SIGINT to browser-use (python)...');
+        child.kill('SIGINT');
+        setTimeout(() => {
+          if (!child.killed) child.kill('SIGTERM');
+        }, 2000);
+      }
+    };
+
+    process.once('SIGINT', handleSigint);
+
+    child.on('close', (code) => {
+      process.removeListener('SIGINT', handleSigint);
+      if (code !== 0) {
+        console.error('browser-use run failed. Ensure browser-use is installed and Chrome profile path is valid.');
+      }
+      resolve(code === 0);
+    });
+  });
 }
 
 async function runDeterministicGoogleSearch(query, options) {
@@ -586,7 +604,7 @@ async function main() {
 
     console.log('\nRunning POC. Press Ctrl+C to trigger kill switch.');
     if (executor === 'browser-use') {
-      const ok = runBrowserUse(
+      const ok = await runBrowserUse(
         effectiveGoal,
         model || 'ollama/llama3',
         host || process.env.OLLAMA_HOST || 'http://localhost:11434',
