@@ -251,6 +251,7 @@ async function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', 
   fs.mkdirSync(runDir, { recursive: true });
   const systemMessage = `
 Plan and act step-by-step. Before acting, outline a brief markdown plan of concrete steps for this specific goal; then follow it exactly.
+DOM/load guard: after each navigation, wait for load/idle; if the DOM is empty or has <20 elements, wait 2s and refresh once. Do not issue further actions until the DOM is non-empty and the target field (e.g., textarea[name="q"] or input[name="q"]) is present.
 At each step:
   1) wait for page load/idle,
   2) gather DOM/rendered info,
@@ -417,18 +418,19 @@ asyncio.run(main())
     OLLAMA_API_BASE: llmBase,
     BROWSER_USE_BROWSER_PATH: browserPath,
     BROWSER_USE_USER_DATA_DIR: userDataDir,
+    RUN_DIR: runDir,
     NO_PROXY: process.env.NO_PROXY || process.env.no_proxy || '127.0.0.1,localhost',
     no_proxy: process.env.no_proxy || process.env.NO_PROXY || '127.0.0.1,localhost'
   };
   return await new Promise((resolve) => {
     const child = spawn('python', ['-c', py], { stdio: 'inherit', env });
     const timer = setTimeout(() => {
-      console.warn('browser-use run exceeded 90s, sending SIGTERM');
+      console.warn('browser-use run exceeded 150s, sending SIGTERM');
       child.kill('SIGTERM');
       setTimeout(() => {
         if (!child.killed) child.kill('SIGKILL');
       }, 2000);
-    }, 90_000);
+    }, 150_000);
 
     const handleSigint = () => {
       if (!child.killed) {
