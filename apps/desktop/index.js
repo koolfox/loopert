@@ -251,7 +251,7 @@ function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', opts =
   const pySupervised = supervised ? 'True' : 'False';
   const pySavePath = supervised ? JSON.stringify(savePath) : 'None';
   const initialActions = supervised
-    ? `[{"action":"ask_human","params":{"prompt":"[HITL] Please clear any popups/consent/captcha, then press Enter or describe what you did."}}]`
+    ? `[{"ask_human":{"prompt":"[HITL] Please clear any popups/consent/captcha, then press Enter or describe what you did."}}]`
     : 'None';
   const py = `
 import os, asyncio
