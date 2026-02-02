@@ -248,6 +248,8 @@ function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', opts =
     ensureDir(userDataDir);
   }
   const savePath = supervised ? `artifacts/supervised-${Date.now()}.jsonl` : null;
+  const pySupervised = supervised ? 'True' : 'False';
+  const pySavePath = supervised ? JSON.stringify(savePath) : 'None';
   const py = `
 import os, asyncio
 from browser_use import Agent, Browser, Tools
@@ -294,7 +296,7 @@ else:
         wait_between_actions=0.4,
     )
 
-tools = Tools() if ${supervised} else None
+tools = Tools() if ${pySupervised} else None
 
 if tools:
     @tools.action(description='Ask a human to resolve a blocker (popup, captcha, form) and optionally describe what they did')
@@ -314,7 +316,7 @@ async def main():
         llm_timeout=120,
         step_timeout=180,
         tools=tools,
-        save_conversation_path=${JSON.stringify(savePath || null)},
+        save_conversation_path=${pySavePath},
         extend_system_message="On every page load and before executing any next step, FIRST check for overlays/popups/consent dialogs (any language). If present, clear it before doing anything else: prefer close icon (x/✕) or reject/decline; accept only if reject is absent. Text heuristics (case/locale-insensitive): reject/decline/refuse/no/later, then accept/agree/allow/consent/continue. Multi-language hints: accepter/refuser/autoriser/continuer (fr); akzeptieren/ablehnen (de); aceptar/rechazar/continuar (es); accetta/rifiuta (it); aceitar/recusar (pt); accepteren/weigeren (nl); godta/avslå (no); acceptera/avvisa/avböj (sv); acceptere/afslå (da); hyväksy/hylkää (fi); принять/отклонить (ru); 同意/拒否/許可/続行 (ja); 동의/거부 (ko); 接受/拒绝 (zh). If unsure, use keyboard navigation (Tab/Enter/Escape) to dismiss. After clearing, proceed with the task. If navigation or clicks fail, try refresh, wait 1s, scroll. If captcha/human verification appears, stop and report. Use go_back if stuck on blank/blocked pages. Only take screenshots when the page or URL changes.",
     )
     await agent.run()
