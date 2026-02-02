@@ -309,7 +309,10 @@ tools = Tools() if ${pySupervised} else None
 if tools:
     @tools.action(description='Ask a human to resolve a blocker (popup, captcha, form) and optionally describe what they did')
     async def ask_human(prompt: str = "Please handle the blocking UI (popup/captcha) and type what you did.") -> ActionResult:
-        resp = input(f"[HITL] {prompt}\\n> ")
+        import sys
+        sys.stdout.write(f"[HITL] {prompt}\\n(type your note and press Enter)\\n> ")
+        sys.stdout.flush()
+        resp = sys.stdin.readline().strip()
         return ActionResult(extracted_content=resp or "ack", success=True)
 
 async def main():
