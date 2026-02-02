@@ -40,7 +40,8 @@ const DEFAULTS = {
   workspace: 'loopert-workspace',
   executor: 'browser-use', // browser-use | playwright
   keepOpen: false,
-  fallbackPlaywright: false
+  fallbackPlaywright: false,
+  supervised: false
 };
 
 function loadCliConfig(path) {
@@ -74,6 +75,7 @@ Options:
   --executor <browser-use|playwright>  Choose executor (default: browser-use)
   --keep-open          Do not close Playwright browser after execution (debug/manual follow-up)
   --fallback-playwright Allow Playwright fallback if browser-use fails (default: false)
+  --supervised        Human-in-the-loop run; enables ask_human tool and saves trajectory
   --cli-config <path>  Path to CLI config.yaml (default: config.yaml)
   --plan <path>        Precomputed JSON plan file (bypasses planner)
   --repl               Chat-style loop: enter goals repeatedly until blank line
@@ -236,7 +238,8 @@ function stripQuotes(val) {
   return trimmed;
 }
 
-function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', taskEnv = {}) {
+function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', opts = {}) {
+  const { supervised = false, taskEnv = {} } = opts || {};
   const sanitizedGoal = (goal || '').replace(/<([^>]+)>/g, '$1');
   const llmBase = `${ollamaUrl.replace(/\/$/, '')}/v1`;
   const browserPath = stripQuotes(process.env.BROWSER_USE_BROWSER_PATH) || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
@@ -244,10 +247,12 @@ function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', taskEn
   if (userDataDir) {
     ensureDir(userDataDir);
   }
+  const savePath = supervised ? `artifacts/supervised-${Date.now()}.jsonl` : null;
   const py = `
 import os, asyncio
-from browser_use import Agent, Browser
+from browser_use import Agent, Browser, Tools
 from browser_use.llm import ChatOllama, ChatBrowserUse
+from browser_use.tools.service import ActionResult
 
 goal = ${JSON.stringify(sanitizedGoal)}
 model = os.getenv("BROWSER_USE_MODEL") or "${model || 'gemma3n:e4b'}"
@@ -289,6 +294,14 @@ else:
         wait_between_actions=0.4,
     )
 
+tools = Tools() if ${supervised} else None
+
+if tools:
+    @tools.action(description='Ask a human to resolve a blocker (popup, captcha, form) and optionally describe what they did')
+    async def ask_human(prompt: str = "Please handle the blocking UI (popup/captcha) and type what you did.") -> ActionResult:
+        resp = input(f"[HITL] {prompt}\\n> ")
+        return ActionResult(extracted_content=resp or "ack", success=True)
+
 async def main():
     agent = Agent(
         task=goal,
@@ -300,6 +313,8 @@ async def main():
         use_thinking=True,
         llm_timeout=120,
         step_timeout=180,
+        tools=tools,
+        save_conversation_path=${JSON.stringify(savePath || null)},
         extend_system_message="On every page load and before executing any next step, FIRST check for overlays/popups/consent dialogs (any language). If present, clear it before doing anything else: prefer close icon (x/✕) or reject/decline; accept only if reject is absent. Text heuristics (case/locale-insensitive): reject/decline/refuse/no/later, then accept/agree/allow/consent/continue. Multi-language hints: accepter/refuser/autoriser/continuer (fr); akzeptieren/ablehnen (de); aceptar/rechazar/continuar (es); accetta/rifiuta (it); aceitar/recusar (pt); accepteren/weigeren (nl); godta/avslå (no); acceptera/avvisa/avböj (sv); acceptere/afslå (da); hyväksy/hylkää (fi); принять/отклонить (ru); 同意/拒否/許可/続行 (ja); 동의/거부 (ko); 接受/拒绝 (zh). If unsure, use keyboard navigation (Tab/Enter/Escape) to dismiss. After clearing, proceed with the task. If navigation or clicks fail, try refresh, wait 1s, scroll. If captcha/human verification appears, stop and report. Use go_back if stuck on blank/blocked pages. Only take screenshots when the page or URL changes.",
     )
     await agent.run()
@@ -483,7 +498,8 @@ async function main() {
     repl: flags.repl ?? fileConfig.repl ?? DEFAULTS.repl,
     manualDefault: flags.manual ?? fileConfig.manual_default ?? DEFAULTS.manualDefault,
     disableTestSite: flags['disable-test-site'] ?? fileConfig.disable_test_site ?? DEFAULTS.disableTestSite,
-    stubPlan: Boolean(flags['stub-plan'] || fileConfig.stub_plan)
+    stubPlan: Boolean(flags['stub-plan'] || fileConfig.stub_plan),
+    supervised: flags.supervised ?? fileConfig.supervised ?? DEFAULTS.supervised
   };
   const useStubPlan = Boolean(merged.stubPlan);
   const headless = Boolean(merged.headless);
@@ -504,6 +520,7 @@ async function main() {
   const replMode = Boolean(merged.repl);
   const manualMode = Boolean(merged.manualDefault) || (replMode && !goal && !planPath && !useStubPlan);
   const disableTestSite = Boolean(merged.disableTestSite);
+  const supervised = Boolean(merged.supervised);
 
   let server = null;
   let url = '';
@@ -556,7 +573,8 @@ async function main() {
       const ok = runBrowserUse(
         effectiveGoal,
         model || 'ollama/llama3',
-        host || process.env.OLLAMA_HOST || 'http://localhost:11434'
+        host || process.env.OLLAMA_HOST || 'http://localhost:11434',
+        { supervised }
       );
       console.log('\nResult:', ok ? { status: 'ok', executor: 'browser-use' } : { status: 'failed', executor: 'browser-use' });
       if (ok) return { status: 'ok', executor: 'browser-use' };
