@@ -243,6 +243,25 @@ function stripQuotes(val) {
 async function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', opts = {}) {
   const { supervised = false, supervisedMode = 'assist', taskEnv = {} } = opts || {};
   const sanitizedGoal = (goal || '').replace(/<([^>]+)>/g, '$1');
+  const systemMessage = `
+Plan and act step-by-step. Before acting, outline a brief markdown plan of concrete steps for this specific goal; then follow it exactly.
+At each step:
+  1) wait for page load/idle,
+  2) gather DOM/rendered info,
+  3) check for new or delayed popups/consent/cookie banners,
+  4) clear blockers first (reject/close preferred),
+  5) execute the planned action,
+  6) verify outcome (URL/element present/screenshot).
+If any obstacle appears, run an obstacle handler (close popup, refresh+wait, scroll) before continuing; if still blocked and supervised, call ask_human.
+Maintain focus on the stated goal; do not wander.
+Only perform sign-in/signup/account actions when the user goal explicitly requires it; otherwise treat auth pages (e.g., accounts.google.com) as blockers: go back/close and return to the task, and never request or enter credentials unprompted.
+For google.com search flows, target the search box via textarea[name="q"] or input[name="q"], type the query, and submit with Enter; do NOT click logos/images.
+Multi-language popup hints: reject/decline/refuse/no/later and accept/agree/allow/consent/continue in fr/de/es/it/pt/nl/no/sv/da/fi/ru/ja/ko/zh.
+Use keyboard (Tab/Enter/Esc) or ✕ when unclear.
+If captcha/human verification or persistent blockers occur, stop and report; when supervised, call ask_human for assistance/validation after a stuck step.
+Only take screenshots when page or URL changes.
+If supervised lead mode is True, defer to ask_human before first navigation and whenever uncertain; learn from the human’s narrated steps and then continue automatically.
+`.trim();
   const llmBase = `${ollamaUrl.replace(/\/$/, '')}/v1`;
   const browserPath = stripQuotes(process.env.BROWSER_USE_BROWSER_PATH) || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
   const userDataDir = stripQuotes(process.env.BROWSER_USE_USER_DATA_DIR) || '';
@@ -267,6 +286,7 @@ from browser_use.tools.service import ActionResult
 goal = ${JSON.stringify(sanitizedGoal)}
 model = os.getenv("BROWSER_USE_MODEL") or "${model || 'gemma3n:e4b'}"
 base_url = os.getenv("BROWSER_USE_BASE_URL") or "${llmBase}"
+system_message = ${JSON.stringify(systemMessage)}
 def _strip(v):
     if not v:
         return v
@@ -329,7 +349,7 @@ async def main():
         tools=tools,
         save_conversation_path=${pySavePath},
         initial_actions=${initialActions},
-        extend_system_message="Plan and act step-by-step. Before acting, outline a brief markdown plan of concrete steps for this specific goal; then follow it exactly. At each step: (1) wait for page load/idle, (2) gather DOM/rendered info, (3) check for new or delayed popups/consent/cookie banners, (4) clear blockers first (reject/close preferred), (5) execute the planned action, (6) verify outcome (URL/element present/screenshot). If any obstacle appears, run an obstacle handler (close popup, refresh+wait, scroll) before continuing; if still blocked, and supervised, call ask_human. Maintain focus on the stated goal; do not wander. Only perform sign-in/signup/account actions when the user goal explicitly requires it; otherwise treat auth pages (e.g., accounts.google.com) as blockers: go back/close and return to the task, and never request or enter credentials unprompted. For google.com search flows, target the search box via textarea[name=\"q\"] or input[name=\"q\"], type the query, and submit with Enter; do NOT click logos/images. Multi-language popup hints: reject/decline/refuse/no/later and accept/agree/allow/consent/continue in fr/de/es/it/pt/nl/no/sv/da/fi/ru/ja/ko/zh. Use keyboard (Tab/Enter/Esc) or ✕ when unclear. If captcha/human verification or persistent blockers occur, stop and report; when supervised, call ask_human for assistance/validation after a stuck step. Only take screenshots when page or URL changes. If supervised lead mode is True, defer to ask_human before first navigation and whenever uncertain; learn from the human’s narrated steps and then continue automatically.",
+        extend_system_message=system_message,
     )
     await agent.run()
 
