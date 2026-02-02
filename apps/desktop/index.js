@@ -3,6 +3,7 @@ import { spawn, spawnSync } from 'child_process';
 import fs from 'fs';
 import http from 'http';
 import yaml from 'js-yaml';
+import path from 'path';
 import { stdin as input, stdout as output } from 'node:process';
 import { chromium } from 'playwright';
 import readline from 'readline/promises';
@@ -245,6 +246,9 @@ function stripQuotes(val) {
 async function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', opts = {}) {
   const { supervised = false, supervisedMode = 'assist', hitlAuto = false, taskEnv = {} } = opts || {};
   const sanitizedGoal = (goal || '').replace(/<([^>]+)>/g, '$1');
+  const runId = Date.now();
+  const runDir = path.join('artifacts', `run-${runId}`);
+  fs.mkdirSync(runDir, { recursive: true });
   const systemMessage = `
 Plan and act step-by-step. Before acting, outline a brief markdown plan of concrete steps for this specific goal; then follow it exactly.
 At each step:
@@ -270,7 +274,7 @@ If supervised lead mode is True, defer to ask_human before first navigation and 
   if (userDataDir) {
     ensureDir(userDataDir);
   }
-  const savePath = supervised ? `artifacts/supervised-${Date.now()}.jsonl` : null;
+  const savePath = path.join(runDir, 'conversation.jsonl');
   const pySupervised = supervised ? 'True' : 'False';
   const pySavePath = supervised ? JSON.stringify(savePath) : 'None';
   const pyLead = supervisedMode === 'lead' ? 'True' : 'False';
@@ -290,6 +294,8 @@ goal = ${JSON.stringify(sanitizedGoal)}
 model = os.getenv("BROWSER_USE_MODEL") or "${model || 'gemma3n:e4b'}"
 base_url = os.getenv("BROWSER_USE_BASE_URL") or "${llmBase}"
 system_message = ${JSON.stringify(systemMessage)}
+artifacts_dir = os.getenv("RUN_DIR") or "artifacts"
+os.makedirs(artifacts_dir, exist_ok=True)
 def _strip(v):
     if not v:
         return v
@@ -355,6 +361,9 @@ async def main():
         save_conversation_path=${pySavePath},
         initial_actions=${initialActions},
         extend_system_message=system_message,
+        include_recent_events=True,
+        generate_gif=False,
+        file_system_path=artifacts_dir,
     )
     await agent.run()
 
@@ -372,6 +381,13 @@ asyncio.run(main())
   };
   return await new Promise((resolve) => {
     const child = spawn('python', ['-c', py], { stdio: 'inherit', env });
+    const timer = setTimeout(() => {
+      console.warn('browser-use run exceeded 90s, sending SIGTERM');
+      child.kill('SIGTERM');
+      setTimeout(() => {
+        if (!child.killed) child.kill('SIGKILL');
+      }, 2000);
+    }, 90_000);
 
     const handleSigint = () => {
       if (!child.killed) {
@@ -386,6 +402,7 @@ asyncio.run(main())
     process.once('SIGINT', handleSigint);
 
     child.on('close', (code) => {
+      clearTimeout(timer);
       process.removeListener('SIGINT', handleSigint);
       if (code !== 0) {
         console.error('browser-use run failed. Ensure browser-use is installed and Chrome profile path is valid.');
