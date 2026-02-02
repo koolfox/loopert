@@ -313,7 +313,7 @@ if tools:
         sys.stdout.write(f"[HITL] {prompt}\\n(type your note and press Enter)\\n> ")
         sys.stdout.flush()
         resp = sys.stdin.readline().strip()
-        return ActionResult(extracted_content=resp or "ack", success=True)
+        return ActionResult(extracted_content=resp or "ack")
 
 async def main():
     agent = Agent(
