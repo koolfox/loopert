@@ -347,6 +347,33 @@ if tools:
         return ActionResult(extracted_content=resp or "ack")
 
 async def main():
+    import json, pathlib, re
+    out_dir = pathlib.Path(artifacts_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    def save_json(obj, path):
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(obj, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"[debug] failed writing {path}: {e}")
+
+    async def on_step(state, output, idx):
+        data = {
+            "idx": idx,
+            "url": getattr(state, "url", None),
+            "title": getattr(state, "title", None),
+            "text": getattr(state, "text", None),
+            "interactables": getattr(state, "interactables", None),
+            "model_output": output.dict() if hasattr(output, "dict") else str(output),
+        }
+        save_json(data, out_dir / f"step-{idx}-state.json")
+        # simple obstacle scan
+        text = (data.get("text") or "").lower()
+        blockers = ["cookie", "consent", "captcha", "human verification", "sign in", "login"]
+        if any(b in text for b in blockers):
+            print(f"[obstacle] potential blocker detected at step {idx}: {blockers}")
+
     agent = Agent(
         task=goal,
         browser=browser,
@@ -367,6 +394,7 @@ async def main():
         include_attributes=["id","name","aria-label","role","type","placeholder","href","alt"],
         use_vision=True,
         vision_detail_level="high",
+        register_new_step_callback=on_step,
     )
     history = await agent.run()
     try:
