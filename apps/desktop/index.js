@@ -364,8 +364,21 @@ async def main():
         include_recent_events=True,
         generate_gif=False,
         file_system_path=artifacts_dir,
+        include_attributes=["id","name","aria-label","role","type","placeholder","href","alt"],
+        use_vision=True,
+        vision_detail_level="high",
     )
-    await agent.run()
+    history = await agent.run()
+    try:
+        import json, pathlib
+        out_dir = pathlib.Path(artifacts_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        with open(out_dir / "history.json", "w", encoding="utf-8") as f:
+            json.dump(history.action_history(), f, ensure_ascii=False, indent=2)
+        with open(out_dir / "history-urls.json", "w", encoding="utf-8") as f:
+            json.dump(history.urls(), f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[debug] failed to write history: {e}")
 
 asyncio.run(main())
 `;
