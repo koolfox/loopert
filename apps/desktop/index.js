@@ -42,7 +42,8 @@ const DEFAULTS = {
   keepOpen: false,
   fallbackPlaywright: false,
   supervised: false,
-  supervisedMode: 'assist' // assist | lead
+  supervisedMode: 'assist', // assist | lead
+  hitlAuto: false
 };
 
 function loadCliConfig(path) {
@@ -78,6 +79,7 @@ Options:
   --fallback-playwright Allow Playwright fallback if browser-use fails (default: false)
   --supervised        Human-in-the-loop run; enables ask_human tool and saves trajectory
   --supervised-mode <assist|lead>  In lead mode, human demonstrates flow first; default assist
+  --hitl-auto         Auto-ack ask_human prompts (useful for non-interactive runs)
   --cli-config <path>  Path to CLI config.yaml (default: config.yaml)
   --plan <path>        Precomputed JSON plan file (bypasses planner)
   --repl               Chat-style loop: enter goals repeatedly until blank line
@@ -241,7 +243,7 @@ function stripQuotes(val) {
 }
 
 async function runBrowserUse(goal, model, ollamaUrl = 'http://localhost:11434', opts = {}) {
-  const { supervised = false, supervisedMode = 'assist', taskEnv = {} } = opts || {};
+  const { supervised = false, supervisedMode = 'assist', hitlAuto = false, taskEnv = {} } = opts || {};
   const sanitizedGoal = (goal || '').replace(/<([^>]+)>/g, '$1');
   const systemMessage = `
 Plan and act step-by-step. Before acting, outline a brief markdown plan of concrete steps for this specific goal; then follow it exactly.
@@ -272,6 +274,7 @@ If supervised lead mode is True, defer to ask_human before first navigation and 
   const pySupervised = supervised ? 'True' : 'False';
   const pySavePath = supervised ? JSON.stringify(savePath) : 'None';
   const pyLead = supervisedMode === 'lead' ? 'True' : 'False';
+  const pyHitlAuto = hitlAuto ? 'True' : 'False';
   const initialActions = supervised
     ? pyLead === 'True'
       ? `[{"ask_human":{"prompt":"[HITL] Lead mode: please drive the full task once (enter URL, accept/clear popups, search, click first result, narrate what you did). Press Enter when done."}}]`
@@ -330,6 +333,8 @@ if tools:
     @tools.action(description='Ask a human to resolve a blocker (popup, captcha, form) and optionally describe what they did')
     async def ask_human(prompt: str = "Please handle the blocking UI (popup/captcha) and type what you did.") -> ActionResult:
         import sys
+        if ${pyHitlAuto}:
+            return ActionResult(extracted_content="[auto-ack HITL]", is_done=False)
         sys.stdout.write(f"[HITL] {prompt}\\n(type your note and press Enter)\\n> ")
         sys.stdout.flush()
         resp = sys.stdin.readline().strip()
@@ -552,7 +557,8 @@ async function main() {
     disableTestSite: flags['disable-test-site'] ?? fileConfig.disable_test_site ?? DEFAULTS.disableTestSite,
     stubPlan: Boolean(flags['stub-plan'] || fileConfig.stub_plan),
     supervised: flags.supervised ?? fileConfig.supervised ?? DEFAULTS.supervised,
-    supervisedMode: flags['supervised-mode'] || fileConfig.supervised_mode || DEFAULTS.supervisedMode
+    supervisedMode: flags['supervised-mode'] || fileConfig.supervised_mode || DEFAULTS.supervisedMode,
+    hitlAuto: flags['hitl-auto'] ?? fileConfig.hitl_auto ?? DEFAULTS.hitlAuto
   };
   const useStubPlan = Boolean(merged.stubPlan);
   const headless = Boolean(merged.headless);
@@ -575,6 +581,7 @@ async function main() {
   const disableTestSite = Boolean(merged.disableTestSite);
   const supervised = Boolean(merged.supervised);
   const supervisedMode = (merged.supervisedMode || 'assist').toString().toLowerCase() === 'lead' ? 'lead' : 'assist';
+  const hitlAuto = Boolean(merged.hitlAuto);
 
   let server = null;
   let url = '';
@@ -628,7 +635,7 @@ async function main() {
         effectiveGoal,
         model || 'ollama/llama3',
         host || process.env.OLLAMA_HOST || 'http://localhost:11434',
-        { supervised, supervisedMode, taskEnv: {} }
+        { supervised, supervisedMode, hitlAuto, taskEnv: {} }
       );
       console.log('\nResult:', ok ? { status: 'ok', executor: 'browser-use' } : { status: 'failed', executor: 'browser-use' });
       if (ok) return { status: 'ok', executor: 'browser-use' };
