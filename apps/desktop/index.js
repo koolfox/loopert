@@ -88,14 +88,13 @@ async function main() {
   ensureDir(runDir);
 
 const systemMessage = `
-Plan then act. For this specific goal, produce a short markdown plan and follow it exactly.
-After every navigation: wait for load/idle; if DOM is empty or no interactables, wait 2s then refresh once before continuing.
-Each step: (1) wait/idle, (2) gather DOM/screenshot, (3) check & clear blockers (consent/cookie/captcha/auth), (4) execute planned action, (5) verify via URL/element/screenshot.
-Use vision aggressively (qwen3-vl). Prefer reject/decline/close/✕; if coordinates or index are clear, use click_xy or click that index. If the page looks blank or stuck, wait then refresh once before new actions.
-Avoid sign-in unless the goal requires it; treat auth/captcha as blockers.
-For Google: use textarea[name="q"] or input[name="q"], type query, press Enter; do not click logos.
-If stuck or captcha persists, stop and report; if supervised, call ask_human.
-Keep outputs concise (<80 words) to avoid timeouts.
+Be concise; follow the stated goal only.
+Loop: wait for load/idle → gather DOM & screenshot → clear popups/consent/captcha first (reject/close preferred) → act → verify via URL/element.
+Use vision (qwen3-vl) to locate blockers; click close/reject/✕ or consent if reject missing.
+Google search: focus textarea[name="q"] or input[name="q"], type query, press Enter; do not click logos/images.
+Treat auth/captcha as blockers unless goal explicitly requires login; if blocked and supervised, call ask_human.
+If DOM empty, wait 2s then refresh once.
+Outputs must be minimal JSON; keep text under 40 words.
 `.trim();
 
   const py = `
@@ -301,9 +300,10 @@ async def main():
                 browser=browser,
                 llm=llm,
                 directly_open_url=False,
-                max_failures=3,
-                max_actions_per_step=3,
-                use_thinking=True,
+                max_failures=2,
+                max_actions_per_step=2,
+                use_thinking=False,
+                flash_mode=True,
                 llm_timeout=120,
                 step_timeout=180,
                 tools=tools,
