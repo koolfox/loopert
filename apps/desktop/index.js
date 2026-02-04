@@ -88,13 +88,11 @@ async function main() {
   ensureDir(runDir);
 
 const systemMessage = `
-Be concise; follow the stated goal only.
-Loop: wait for load/idle → gather DOM & screenshot → clear popups/consent/captcha first (reject/close preferred) → act → verify via URL/element.
-Use vision (qwen3-vl) to locate blockers; click close/reject/✕ or consent if reject missing.
-Google search: focus textarea[name="q"] or input[name="q"], type query, press Enter; do not click logos/images.
-Treat auth/captcha as blockers unless goal explicitly requires login; if blocked and supervised, call ask_human.
-If DOM empty, wait 2s then refresh once.
-Outputs must be minimal JSON; keep text under 40 words.
+Be concise; follow ONLY the stated goal.
+Loop: wait for load/idle → gather DOM & screenshot → clear popups/consent/captcha first (reject/close preferred) → act → verify via URL/element. Use vision (qwen3-vl) for blockers.
+If on Google, prefer the tool google_search(query) to fill textarea/input name="q" and submit. Otherwise focus the box and press Enter. Do not click logos/images. Avoid the Sign in link unless goal requires it.
+Treat auth/captcha as blockers; if stuck and supervised, call ask_human. If DOM empty, wait 2s then refresh once.
+Outputs must be minimal valid JSON; keep free text under 40 words.
 `.trim();
 
   const py = `
@@ -152,6 +150,26 @@ if tools:
     async def click_xy(x: float, y: float, browser_session: BrowserSession) -> ActionResult:
         await browser_session.click_point({"x": x, "y": y})
         return ActionResult(extracted_content=f"clicked {x},{y}")
+
+    @tools.action(description='Fill Google search box with query and submit with Enter (uses JS for reliability)', allowed_domains=["*.google.*"])
+    async def google_search(query: str, browser_session: BrowserSession) -> ActionResult:
+        script = r"""
+(() => {
+  const box = document.querySelector('textarea[name="q"], input[name="q"]');
+  if (!box) return 'no box';
+  box.focus();
+  box.value = arguments[0];
+  box.dispatchEvent(new Event('input', {bubbles: true}));
+  const form = box.form || document.querySelector('form[role="search"]');
+  if (form) form.submit(); else {
+    const enter = new KeyboardEvent('keydown', {key:'Enter', code:'Enter', which:13, keyCode:13, bubbles:true});
+    box.dispatchEvent(enter);
+  }
+  return 'ok';
+})();
+"""
+        res = await browser_session.evaluate(script, [query])
+        return ActionResult(extracted_content=str(res))
 
 def coord_from_interactable(interactables, idx):
     try:
@@ -304,8 +322,8 @@ async def main():
                 max_actions_per_step=2,
                 use_thinking=False,
                 flash_mode=True,
-                llm_timeout=120,
-                step_timeout=180,
+                llm_timeout=90,
+                step_timeout=150,
                 tools=tools,
                 save_conversation_path=${supervised ? 'f"{artifacts_dir}/conversation.jsonl"' : 'None'},
                 initial_actions=None,
