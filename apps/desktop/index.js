@@ -190,6 +190,25 @@ def make_plan_md(goal_text):
         md += f"  - Fallback: {s['fallback']}\\n"
     return md, steps
 
+def normalize_plan(steps):
+    # Merge blocker handling into the first step to avoid no-op blocker steps
+    if not steps:
+        return steps
+    merged = []
+    blocker = None
+    for s in steps:
+        title = (s.get("title") or "").lower()
+        action = (s.get("action") or "").lower()
+        if "blocker" in title or "popup" in action or "consent" in action or "captcha" in action:
+            blocker = s
+            continue
+        merged.append(s)
+    if blocker and merged:
+        merged[0]["action"] = (merged[0].get("action","") + " Then clear blockers (popups/consent/captcha) before continuing.").strip()
+        merged[0]["success_criteria"] = (merged[0].get("success_criteria","") + " No blocking overlays remain.").strip()
+        merged[0]["fallback"] = (merged[0].get("fallback","") + " If blocked, close/deny or ask_human (supervised).").strip()
+    return merged
+
 browser_path = _expand(_strip(os.getenv("BROWSER_USE_BROWSER_PATH"))) or _expand(r"${browserPath.replace(/\\/g, '\\\\')}")
 user_data_dir = _expand(_strip(os.getenv("BROWSER_USE_USER_DATA_DIR"))) or _expand("${userDataDir}")
 profile_dir = _strip(os.getenv("BROWSER_USE_PROFILE_DIR")) or "${DEFAULTS.profileDir}"
@@ -388,6 +407,18 @@ async def on_step(state, output, idx):
 
 async def main():
     plan_md, plan_steps = make_plan_md(goal)
+    plan_steps = normalize_plan(plan_steps)
+    # rebuild plan_md to reflect normalized steps
+    try:
+        md = "# Task Plan\\n"
+        for i, s in enumerate(plan_steps, 1):
+            md += f"\\n- [ ] Step {i}: {s.get('title','') or 'Step'}\\n"
+            md += f"  - Action: {s.get('action','')}\\n"
+            md += f"  - Success: {s.get('success_criteria','')}\\n"
+            md += f"  - Fallback: {s.get('fallback','')}\\n"
+        plan_md = md
+    except Exception:
+        pass
     try:
         with open(pathlib.Path(artifacts_dir) / "plan.md", "w", encoding="utf-8") as f:
             f.write(plan_md)
