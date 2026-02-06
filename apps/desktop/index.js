@@ -108,6 +108,7 @@ base_url = "${host}".rstrip("/")
 system_message = ${JSON.stringify(systemMessage)}
 artifacts_dir = os.getenv("RUN_DIR") or "artifacts"
 os.makedirs(artifacts_dir, exist_ok=True)
+current_plan_step = 0
 
 def _strip(v):
     if not v:
@@ -310,6 +311,7 @@ async def on_step(state, output, idx):
         except Exception as e:
             print(f"[debug] save {name} failed: {e}")
 
+    prefix = f"plan-{current_plan_step}-step-{idx}"
     data = {
         "idx": idx,
         "url": getattr(state, "url", None),
@@ -318,7 +320,7 @@ async def on_step(state, output, idx):
         "interactables": getattr(state, "interactables", None),
         "model_output": output.model_dump() if hasattr(output, "model_dump") else str(output),
     }
-    save(f"step-{idx}-state.json", data)
+    save(f"{prefix}-state.json", data)
 
     # Save screenshot if present
     try:
@@ -326,7 +328,7 @@ async def on_step(state, output, idx):
         if screenshot:
             import base64
             img_bytes = base64.b64decode(screenshot)
-            with open(pathlib.Path(artifacts_dir) / f"step-{idx}-screenshot.png", "wb") as f:
+            with open(pathlib.Path(artifacts_dir) / f"{prefix}-screenshot.png", "wb") as f:
                 f.write(img_bytes)
     except Exception as e:
         print(f"[debug] screenshot save failed at step {idx}: {e}")
@@ -346,7 +348,7 @@ async def on_step(state, output, idx):
                     "aria_label": el.get("aria-label") or el.get("aria_label"),
                     "bounding_box": el.get("bounding_box"),
                 })
-        save(f"step-{idx}-interactables.json", summary)
+        save(f"{prefix}-interactables.json", summary)
     except Exception as e:
         print(f"[debug] interactables summary failed at step {idx}: {e}")
 
@@ -355,13 +357,13 @@ async def on_step(state, output, idx):
         if dom_state:
             dom_llm = dom_state.llm_representation(include_attributes=["id","name","aria-label","role","type","placeholder","href","alt"])
             dom_eval = dom_state.eval_representation(include_attributes=["id","name","aria-label","role","type","placeholder","href","alt"])
-            save(f"step-{idx}-dom.json", {
+            save(f"{prefix}-dom.json", {
                 "url": getattr(state, "url", None),
                 "title": getattr(state, "title", None),
                 "llm_representation": dom_llm,
                 "eval_representation": dom_eval,
             })
-            save(f"step-{idx}-dom-metrics.json", {
+            save(f"{prefix}-dom-metrics.json", {
                 "llm_len": len(dom_llm or ""),
                 "eval_len": len(dom_eval or ""),
                 "interactables_count": len(getattr(state, "interactables", None) or []),
@@ -394,8 +396,11 @@ async def main():
     except Exception as e:
         print(f"[debug] failed to write plan: {e}")
 
-    plan_instruction = "\\nPlan saved to plan.md. Follow steps in order, verify each step before continuing, and track completion in memory.\\n"
+    plan_instruction = "\\nPlan saved to plan.md. Follow steps in order, verify each step before continuing. Execute ONLY the current step; do not improvise or jump ahead.\\n"
     effective_system = system_message + plan_instruction
+
+    # Track which plan step is running for logging
+    global current_plan_step
 
     candidates = [
         {
@@ -436,30 +441,40 @@ async def main():
         try:
             print(f"[runner] launching browser candidate: {label}")
             browser = Browser(**cand["params"])
-            agent = Agent(
-                task=goal,
-                browser=browser,
-                llm=llm,
-                directly_open_url=False,
-                max_failures=2,
-                max_actions_per_step=2,
-                use_thinking=False,
-                flash_mode=True,
-                llm_timeout=120,
-                step_timeout=150,
-                tools=tools,
-                save_conversation_path=${supervised ? 'f"{artifacts_dir}/conversation.jsonl"' : 'None'},
-                initial_actions=None,
-                extend_system_message=effective_system,
-                include_recent_events=True,
-                generate_gif=False,
-                file_system_path=artifacts_dir,
-                include_attributes=["id","name","aria-label","role","type","placeholder","href","alt"],
-                use_vision=True,
-                vision_detail_level="low",
-                register_new_step_callback=on_step,
-            )
-            history = await agent.run()
+            # Execute plan strictly: one step per Agent run
+            for i, step in enumerate(plan_steps, 1):
+                current_plan_step = i
+                step_task = (
+                    f"Step {i}: {step.get('title','')}. "
+                    f"Action: {step.get('action','')}. "
+                    f"Success: {step.get('success_criteria','')}. "
+                    f"Fallback: {step.get('fallback','')}. "
+                    "Execute ONLY this step and nothing else."
+                )
+                agent = Agent(
+                    task=step_task,
+                    browser=browser,
+                    llm=llm,
+                    directly_open_url=False,
+                    max_failures=2,
+                    max_actions_per_step=1,
+                    use_thinking=False,
+                    flash_mode=True,
+                    llm_timeout=120,
+                    step_timeout=150,
+                    tools=tools,
+                    save_conversation_path=${supervised ? 'f"{artifacts_dir}/conversation.jsonl"' : 'None'},
+                    initial_actions=None,
+                    extend_system_message=effective_system,
+                    include_recent_events=True,
+                    generate_gif=False,
+                    file_system_path=artifacts_dir,
+                    include_attributes=["id","name","aria-label","role","type","placeholder","href","alt"],
+                    use_vision=True,
+                    vision_detail_level="low",
+                    register_new_step_callback=on_step,
+                )
+                history = await agent.run(max_steps=1)
             try:
                 actions_raw = history.action_history()
                 def to_jsonable(x):
