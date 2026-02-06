@@ -409,6 +409,7 @@ async def main():
                 executable_path=browser_path or None,
                 user_data_dir=user_data_dir or None,
                 profile_directory=profile_dir or None,
+                keep_alive=True,
                 headless=${headless ? 'True' : 'False'},
                 args=["--remote-allow-origins=*","--disable-background-networking","--no-first-run"],
             ),
@@ -419,6 +420,7 @@ async def main():
                 executable_path=browser_path or None,
                 user_data_dir=None,
                 profile_directory=None,
+                keep_alive=True,
                 headless=${headless ? 'True' : 'False'},
                 args=["--remote-allow-origins=*","--disable-background-networking","--no-first-run"],
             ),
@@ -429,6 +431,7 @@ async def main():
                 executable_path=None,
                 user_data_dir=None,
                 profile_directory=None,
+                keep_alive=True,
                 headless=True,
                 args=["--remote-allow-origins=*","--disable-background-networking","--no-first-run"],
             ),
@@ -444,6 +447,19 @@ async def main():
             # Execute plan strictly: one step per Agent run
             for i, step in enumerate(plan_steps, 1):
                 current_plan_step = i
+                # Heuristic initial navigation for step 1
+                initial_actions = None
+                if i == 1:
+                    url = None
+                    import re
+                    m = re.search(r'https?://\\S+', goal)
+                    if m:
+                        url = m.group(0).rstrip(').,;')
+                    elif "google.com" in goal.lower():
+                        url = "https://www.google.com"
+                    if url:
+                        initial_actions = [{"navigate": {"url": url}}]
+
                 step_task = (
                     f"Step {i}: {step.get('title','')}. "
                     f"Action: {step.get('action','')}. "
@@ -460,11 +476,11 @@ async def main():
                     max_actions_per_step=1,
                     use_thinking=False,
                     flash_mode=True,
-                    llm_timeout=120,
+                    llm_timeout=180,
                     step_timeout=150,
                     tools=tools,
                     save_conversation_path=${supervised ? 'f"{artifacts_dir}/conversation.jsonl"' : 'None'},
-                    initial_actions=None,
+                    initial_actions=initial_actions,
                     extend_system_message=effective_system,
                     include_recent_events=True,
                     generate_gif=False,
@@ -474,7 +490,14 @@ async def main():
                     vision_detail_level="low",
                     register_new_step_callback=on_step,
                 )
-                history = await agent.run(max_steps=1)
+                history = await agent.run(max_steps=2)
+                try:
+                    names = history.action_names() if history else []
+                    if not names:
+                        print(f"[plan] step {i} produced no actions; stopping plan")
+                        return
+                except Exception:
+                    pass
             try:
                 actions_raw = history.action_history()
                 def to_jsonable(x):
