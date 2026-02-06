@@ -89,8 +89,8 @@ async function main() {
 
 const systemMessage = `
 Be concise; follow ONLY the stated goal.
-Loop: wait for load/idle → gather DOM & screenshot → clear popups/consent/captcha first (reject/close preferred) → act → verify via URL/element. Use vision (qwen3-vl) for blockers.
-If on Google, prefer the tool google_search(query) to fill textarea/input name="q" and submit. Otherwise focus the box and press Enter. Do not click logos/images. Avoid the Sign in link unless goal requires it.
+Loop: wait for load/idle → gather DOM → clear popups/consent/captcha first (reject/close preferred) → act → verify via URL/element.
+If on Google, focus textarea/input name="q", type query, press Enter. Do not click logos/images. Avoid the Sign in link unless goal requires it.
 Treat auth/captcha as blockers; if stuck and supervised, call ask_human. If DOM empty, wait 2s then refresh once.
 Outputs must be minimal valid JSON; keep free text under 40 words.
 `.trim();
@@ -240,25 +240,6 @@ if tools:
         await browser_session.click_point({"x": x, "y": y})
         return ActionResult(extracted_content=f"clicked {x},{y}")
 
-    @tools.action(description='Fill Google search box with query and submit with Enter (uses JS for reliability)', allowed_domains=["*.google.*"])
-    async def google_search(query: str, browser_session: BrowserSession) -> ActionResult:
-        script = r"""
-(() => {
-  const box = document.querySelector('textarea[name="q"], input[name="q"]');
-  if (!box) return 'no box';
-  box.focus();
-  box.value = arguments[0];
-  box.dispatchEvent(new Event('input', {bubbles: true}));
-  const form = box.form || document.querySelector('form[role="search"]');
-  if (form) form.submit(); else {
-    const enter = new KeyboardEvent('keydown', {key:'Enter', code:'Enter', which:13, keyCode:13, bubbles:true});
-    box.dispatchEvent(enter);
-  }
-  return 'ok';
-})();
-"""
-        res = await browser_session.evaluate(script, [query])
-        return ActionResult(extracted_content=str(res))
 
 def coord_from_interactable(interactables, idx):
     try:
@@ -498,7 +479,8 @@ async def main():
                     if m:
                         q = m.group(1).strip().strip('"').strip("'")
                     if q:
-                        initial_actions = [{"google_search": {"query": q}}]
+                        js = "(function(){try{const q="+json.dumps(q)+";const box=document.querySelector('textarea[name=\"q\"], input[name=\"q\"]');if(!box)return 'no box';box.focus();box.value=q;box.dispatchEvent(new Event('input',{bubbles:true}));const form=box.form||document.querySelector('form[role=\"search\"]');if(form)form.submit();else{const enter=new KeyboardEvent('keydown',{key:'Enter',code:'Enter',which:13,keyCode:13,bubbles:true});box.dispatchEvent(enter);}return 'ok';}catch(e){return 'err:'+e.message}})()"
+                        initial_actions = [{"evaluate": {"code": js}}]
 
                 step_task = (
                     f"Step {i}: {step.get('title','')}. "
