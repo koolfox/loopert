@@ -484,6 +484,18 @@ async def main():
                     if m:
                         q = m.group(1).strip().strip('"').strip("'")
                     if q:
+                        dismiss = """(function(){
+try{
+  const texts = ['reject','decline','deny','refuse','отхвър','не','пропусни','accept','agree','allow','consent'];
+  const btns = Array.from(document.querySelectorAll('button, [role="button"], input[type="button"], input[type="submit"]'));
+  const pick = btns.find(b => {
+    const t = (b.innerText || b.value || '').toLowerCase();
+    return texts.some(x => t.includes(x));
+  });
+  if (pick) { pick.click(); return 'clicked'; }
+  return 'no consent';
+} catch(e){ return 'err:'+e.message; }
+})()"""
                         js = f"""(function(){{
 try{{
   const q = {json.dumps(q)};
@@ -503,7 +515,12 @@ try{{
   return 'err:' + e.message;
 }}
 }})()"""
-                        initial_actions = [{"evaluate": {"code": js}}, {"wait": {"seconds": 2}}]
+                        initial_actions = [
+                            {"evaluate": {"code": dismiss}},
+                            {"wait": {"seconds": 1}},
+                            {"evaluate": {"code": js}},
+                            {"wait": {"seconds": 2}},
+                        ]
 
                 step_task = (
                     f"Step {i}: {step.get('title','')}. "
@@ -541,6 +558,8 @@ try{{
                     if not names:
                         print(f"[plan] step {i} produced no actions; stopping plan")
                         return
+                    if all(n == "done" for n in names) and i != len(plan_steps):
+                        print(f"[plan] step {i} returned done early; continuing")
                 except Exception:
                     pass
             try:
