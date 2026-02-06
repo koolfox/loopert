@@ -303,6 +303,13 @@ async def on_step(state, output, idx):
         except Exception as e:
             print(f"[debug] save {name} failed: {e}")
 
+    def save_text(name, text):
+        try:
+            with open(pathlib.Path(artifacts_dir) / name, "w", encoding="utf-8") as f:
+                f.write(text or "")
+        except Exception as e:
+            print(f"[debug] save {name} failed: {e}")
+
     data = {
         "idx": idx,
         "url": getattr(state, "url", None),
@@ -312,6 +319,36 @@ async def on_step(state, output, idx):
         "model_output": output.model_dump() if hasattr(output, "model_dump") else str(output),
     }
     save(f"step-{idx}-state.json", data)
+
+    # Save screenshot if present
+    try:
+        screenshot = getattr(state, "screenshot", None)
+        if screenshot:
+            import base64
+            img_bytes = base64.b64decode(screenshot)
+            with open(pathlib.Path(artifacts_dir) / f"step-{idx}-screenshot.png", "wb") as f:
+                f.write(img_bytes)
+    except Exception as e:
+        print(f"[debug] screenshot save failed at step {idx}: {e}")
+
+    # Compact interactables summary
+    try:
+        inter = getattr(state, "interactables", None) or []
+        summary = []
+        for el in inter:
+            if isinstance(el, dict):
+                summary.append({
+                    "index": el.get("index"),
+                    "type": el.get("type") or el.get("tag"),
+                    "text": el.get("text"),
+                    "role": el.get("role"),
+                    "name": el.get("name"),
+                    "aria_label": el.get("aria-label") or el.get("aria_label"),
+                    "bounding_box": el.get("bounding_box"),
+                })
+        save(f"step-{idx}-interactables.json", summary)
+    except Exception as e:
+        print(f"[debug] interactables summary failed at step {idx}: {e}")
 
     try:
         dom_state = getattr(state, "dom_state", None)
@@ -323,6 +360,11 @@ async def on_step(state, output, idx):
                 "title": getattr(state, "title", None),
                 "llm_representation": dom_llm,
                 "eval_representation": dom_eval,
+            })
+            save(f"step-{idx}-dom-metrics.json", {
+                "llm_len": len(dom_llm or ""),
+                "eval_len": len(dom_eval or ""),
+                "interactables_count": len(getattr(state, "interactables", None) or []),
             })
     except Exception as e:
         print(f"[debug] dom dump failed at step {idx}: {e}")
