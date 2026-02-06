@@ -222,9 +222,12 @@ else:
     llm = ChatOllama(model=model)
 
 # Browser setup (see docs: customize/browser/all-parameters)
-tools = Tools() if ${supervised ? 'True' : 'False'} else None
+def build_tools(allow_done: bool):
+    if not ${supervised ? 'True' : 'False'}:
+        return None
+    exclude = [] if allow_done else ['done']
+    tools = Tools(exclude_actions=exclude)
 
-if tools:
     @tools.action(description='Ask a human to resolve a blocker (popup, captcha, form) and optionally describe what they did')
     async def ask_human(prompt: str = "Handle the blocking UI (popup/captcha) and type what you did.") -> ActionResult:
         import sys
@@ -239,6 +242,8 @@ if tools:
     async def click_xy(x: float, y: float, browser_session: BrowserSession) -> ActionResult:
         await browser_session.click_point({"x": x, "y": y})
         return ActionResult(extracted_content=f"clicked {x},{y}")
+
+    return tools
 
 
 def coord_from_interactable(interactables, idx):
@@ -472,7 +477,7 @@ async def main():
                     if url:
                         initial_actions = [{"navigate": {"url": url}}]
                 # Heuristic search for step 2 (primary action)
-                if i == 2 and tools:
+                if i == 2:
                     import re
                     q = None
                     m = re.search(r'search\\s+([^,]+)', goal, re.I)
@@ -498,15 +503,16 @@ try{{
   return 'err:' + e.message;
 }}
 }})()"""
-                        initial_actions = [{"evaluate": {"code": js}}]
+                        initial_actions = [{"evaluate": {"code": js}}, {"wait": {"seconds": 2}}]
 
                 step_task = (
                     f"Step {i}: {step.get('title','')}. "
                     f"Action: {step.get('action','')}. "
                     f"Success: {step.get('success_criteria','')}. "
                     f"Fallback: {step.get('fallback','')}. "
-                    "Execute ONLY this step and nothing else."
+                    "Execute ONLY this step and nothing else. Do not call done unless this is the final step."
                 )
+                allow_done = (i == len(plan_steps))
                 agent = Agent(
                     task=step_task,
                     browser=browser,
@@ -518,7 +524,7 @@ try{{
                     flash_mode=True,
                     llm_timeout=180,
                     step_timeout=150,
-                    tools=tools,
+                    tools=build_tools(allow_done),
                     save_conversation_path=${supervised ? 'f"{artifacts_dir}/conversation.jsonl"' : 'None'},
                     initial_actions=initial_actions,
                     extend_system_message=effective_system,
