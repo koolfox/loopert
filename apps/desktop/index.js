@@ -394,7 +394,7 @@ async def main():
     except Exception as e:
         print(f"[debug] failed to write plan: {e}")
 
-    plan_instruction = "\\nYou MUST follow this plan in order and verify each step before continuing. Mark steps as done in your memory.\\n" + plan_md
+    plan_instruction = "\\nPlan saved to plan.md. Follow steps in order, verify each step before continuing, and track completion in memory.\\n"
     effective_system = system_message + plan_instruction
 
     candidates = [
@@ -445,7 +445,7 @@ async def main():
                 max_actions_per_step=2,
                 use_thinking=False,
                 flash_mode=True,
-                llm_timeout=90,
+                llm_timeout=120,
                 step_timeout=150,
                 tools=tools,
                 save_conversation_path=${supervised ? 'f"{artifacts_dir}/conversation.jsonl"' : 'None'},
