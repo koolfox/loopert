@@ -120,6 +120,75 @@ def _strip(v):
 def _expand(v):
     return os.path.expandvars(v) if v else v
 
+def _safe_json_from_text(txt):
+    try:
+        import json as pyjson, re
+        m = re.search(r'\\{.*\\}', txt, re.S)
+        if m:
+            return pyjson.loads(m.group(0))
+    except Exception:
+        return None
+    return None
+
+def make_plan_md(goal_text):
+    try:
+        import requests, json as pyjson
+        endpoint = base_url + "/v1/chat/completions"
+        prompt = (
+            "Return ONLY valid JSON with key 'steps'. "
+            "Each step must have: 'title', 'action', 'success_criteria', 'fallback'. "
+            "Keep it short and actionable. Goal: " + goal_text
+        )
+        payload = {
+            "model": model,
+            "messages": [{"role": "system", "content": prompt}],
+            "stream": False,
+        }
+        r = requests.post(endpoint, json=payload, timeout=30)
+        r.raise_for_status()
+        data = r.json()
+        content = None
+        if "choices" in data and data["choices"]:
+            content = data["choices"][0].get("message", {}).get("content", "")
+        plan = _safe_json_from_text(content) if content else None
+        steps = plan.get("steps") if isinstance(plan, dict) else None
+        if not steps:
+            raise RuntimeError("plan parse failed")
+    except Exception:
+        steps = [
+            {
+                "title": "Open target page",
+                "action": "Navigate to the required URL or open the start page for the task.",
+                "success_criteria": "Target page loaded; URL matches; main content visible.",
+                "fallback": "Wait, refresh once, then retry navigation."
+            },
+            {
+                "title": "Handle blockers",
+                "action": "Detect and clear popups/consent/captcha that block interaction.",
+                "success_criteria": "Main page elements are clickable; overlay gone.",
+                "fallback": "Use reject/close; if blocked, ask_human (supervised)."
+            },
+            {
+                "title": "Perform primary action",
+                "action": "Execute the core action required by the goal (search, click, fill).",
+                "success_criteria": "Expected page/state change or result is visible.",
+                "fallback": "Retry once; use alternate selector or keypress."
+            },
+            {
+                "title": "Verify result",
+                "action": "Confirm the outcome and capture snapshot if requested.",
+                "success_criteria": "Result matches goal; snapshot saved if required.",
+                "fallback": "Re-evaluate last step and correct."
+            },
+        ]
+    md = "# Task Plan\\n"
+    for i, s in enumerate(steps, 1):
+        md += f"\\n- [ ] Step {i}: {s['title']}\\n"
+        md += f"  - Action: {s['action']}\\n"
+        md += f"  - Success: {s['success_criteria']}\\n"
+        md += f"  - Fallback: {s['fallback']}\\n"
+    return md, steps
+
 browser_path = _expand(_strip(os.getenv("BROWSER_USE_BROWSER_PATH"))) or _expand(r"${browserPath.replace(/\\/g, '\\\\')}")
 user_data_dir = _expand(_strip(os.getenv("BROWSER_USE_USER_DATA_DIR"))) or _expand("${userDataDir}")
 profile_dir = _strip(os.getenv("BROWSER_USE_PROFILE_DIR")) or "${DEFAULTS.profileDir}"
@@ -274,6 +343,18 @@ async def on_step(state, output, idx):
                 print(f"[vision] auto-click failed at step {idx}: {e}")
 
 async def main():
+    plan_md, plan_steps = make_plan_md(goal)
+    try:
+        with open(pathlib.Path(artifacts_dir) / "plan.md", "w", encoding="utf-8") as f:
+            f.write(plan_md)
+        with open(pathlib.Path(artifacts_dir) / "plan.json", "w", encoding="utf-8") as f:
+            json.dump(plan_steps, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[debug] failed to write plan: {e}")
+
+    plan_instruction = "\\nYou MUST follow this plan in order and verify each step before continuing. Mark steps as done in your memory.\\n" + plan_md
+    effective_system = system_message + plan_instruction
+
     candidates = [
         {
             "label": "user-profile",
@@ -327,7 +408,7 @@ async def main():
                 tools=tools,
                 save_conversation_path=${supervised ? 'f"{artifacts_dir}/conversation.jsonl"' : 'None'},
                 initial_actions=None,
-                extend_system_message=system_message,
+                extend_system_message=effective_system,
                 include_recent_events=True,
                 generate_gif=False,
                 file_system_path=artifacts_dir,
