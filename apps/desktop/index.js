@@ -92,6 +92,7 @@ Be concise; follow ONLY the stated goal.
 Loop: wait for load/idle → gather DOM → clear popups/consent/captcha first (reject/close preferred) → act → verify via URL/element.
 If on Google, focus textarea/input name="q", type query, press Enter. Do not click logos/images. Avoid the Sign in link unless goal requires it.
 Treat auth/captcha as blockers; if stuck and supervised, call ask_human. If DOM empty, wait 2s then refresh once.
+If no action is needed, output a wait action (1 second) instead of returning empty.
 Outputs must be minimal valid JSON; keep free text under 40 words.
 `.trim();
 
@@ -475,7 +476,23 @@ async def main():
                     elif "google.com" in goal.lower():
                         url = "https://www.google.com"
                     if url:
-                        initial_actions = [{"navigate": {"url": url}}]
+                        dismiss = """(function(){
+try{
+  const texts = ['reject','decline','deny','refuse','отхвър','не','пропусни','accept','agree','allow','consent'];
+  const btns = Array.from(document.querySelectorAll('button, [role="button"], input[type="button"], input[type="submit"]'));
+  const pick = btns.find(b => {
+    const t = (b.innerText || b.value || '').toLowerCase();
+    return texts.some(x => t.includes(x));
+  });
+  if (pick) { pick.click(); return 'clicked'; }
+  return 'no consent';
+} catch(e){ return 'err:'+e.message; }
+})()"""
+                        initial_actions = [
+                            {"navigate": {"url": url}},
+                            {"wait": {"seconds": 1}},
+                            {"evaluate": {"code": dismiss}},
+                        ]
                 # Heuristic search for step 2 (primary action)
                 if i == 2:
                     import re
