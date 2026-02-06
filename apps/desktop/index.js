@@ -479,7 +479,25 @@ async def main():
                     if m:
                         q = m.group(1).strip().strip('"').strip("'")
                     if q:
-                        js = "(function(){try{const q="+json.dumps(q)+";const box=document.querySelector('textarea[name=\"q\"], input[name=\"q\"]');if(!box)return 'no box';box.focus();box.value=q;box.dispatchEvent(new Event('input',{bubbles:true}));const form=box.form||document.querySelector('form[role=\"search\"]');if(form)form.submit();else{const enter=new KeyboardEvent('keydown',{key:'Enter',code:'Enter',which:13,keyCode:13,bubbles:true});box.dispatchEvent(enter);}return 'ok';}catch(e){return 'err:'+e.message}})()"
+                        js = f"""(function(){{
+try{{
+  const q = {json.dumps(q)};
+  const box = document.querySelector('textarea[name="q"], input[name="q"]');
+  if(!box) return 'no box';
+  box.focus();
+  box.value = q;
+  box.dispatchEvent(new Event('input',{{bubbles:true}}));
+  const form = box.form || document.querySelector('form[role="search"]');
+  if(form) form.submit();
+  else {{
+    const enter = new KeyboardEvent('keydown',{{key:'Enter',code:'Enter',which:13,keyCode:13,bubbles:true}});
+    box.dispatchEvent(enter);
+  }}
+  return 'ok';
+}} catch(e) {{
+  return 'err:' + e.message;
+}}
+}})()"""
                         initial_actions = [{"evaluate": {"code": js}}]
 
                 step_task = (
