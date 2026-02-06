@@ -490,6 +490,15 @@ async def main():
                         url = "https://www.google.com"
                     if url:
                         initial_actions = [{"navigate": {"url": url}}]
+                # Heuristic search for step 2 (primary action)
+                if i == 2 and tools:
+                    import re
+                    q = None
+                    m = re.search(r'search\\s+([^,]+)', goal, re.I)
+                    if m:
+                        q = m.group(1).strip().strip('"').strip("'")
+                    if q:
+                        initial_actions = [{"google_search": {"query": q}}]
 
                 step_task = (
                     f"Step {i}: {step.get('title','')}. "
@@ -517,11 +526,10 @@ async def main():
                     generate_gif=False,
                     file_system_path=artifacts_dir,
                     include_attributes=["id","name","aria-label","role","type","placeholder","href","alt"],
-                    use_vision=True,
-                    vision_detail_level="low",
+                    use_vision=False,
                     register_new_step_callback=on_step,
                 )
-                history = await agent.run(max_steps=2)
+                history = await agent.run(max_steps=1)
                 try:
                     names = history.action_names() if history else []
                     if not names:
