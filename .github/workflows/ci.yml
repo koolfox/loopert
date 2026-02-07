@@ -28,5 +28,10 @@ jobs:
       - name: Smoke test
         run: npm test
 
+      - name: Install Playwright (Chromium)
+        run: |
+          npm install playwright
+          npx playwright install --with-deps chromium
+
       - name: Playwright smoke (headless example.com)
         run: npm run smoke:play
