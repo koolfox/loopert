@@ -23,7 +23,7 @@ if (!goal) {
   process.exit(1);
 }
 
-const model = process.env.BROWSER_USE_MODEL || 'ollama/llama3';
+const model = process.env.BROWSER_USE_MODEL || 'ollama/qwen3-vl:4b';
 const llmBase = `${(process.env.OLLAMA_URL || 'http://localhost:11434').replace(/\/$/, '')}/v1`;
 
 const args = [

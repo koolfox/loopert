@@ -759,7 +759,7 @@ export async function runPocSession(options) {
   let planSource = 'planner';
   let plan;
   let llmRaw = null;
-  const effectiveModel = model || process.env.OLLAMA_MODEL || 'llama3.1';
+  const effectiveModel = model || process.env.OLLAMA_MODEL || 'qwen3-vl:4b';
   const browser = await chromium.launch({ headless, devtools });
   const context = await browser.newContext();
   const page = await context.newPage();

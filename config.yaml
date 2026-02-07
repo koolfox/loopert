@@ -1,5 +1,5 @@
-model: qwen3:30b
-host: 
+model: qwen3-vl:4b
+host:
 profile: pro
 headless: false
 devtools: true

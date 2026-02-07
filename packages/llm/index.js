@@ -299,7 +299,7 @@ export async function planGoal(goalInput, options = {}) {
   }
 
   const {
-    model = process.env.OLLAMA_MODEL || 'llama3.1',
+    model = process.env.OLLAMA_MODEL || 'qwen3-vl:4b',
     host,
     policyHint,
     toolCatalog: toolCatalogOpt,
